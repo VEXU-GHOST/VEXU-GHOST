@@ -117,16 +117,16 @@ void GhostExampleRobot::teleop(double current_time)
 if (joy_data->btn_r2){
 
   // Adding both left y axis and right y axis
-  double forward_vel = (joy_data->left_y + joy_data->right_y)  / 127.0;
+  double forward_vel = (joy_data->left_y) / 127.0;
   //Adding both right x axis and left x axis
-  double angular_vel = (joy_data->right_x + joy_data->left_x ) / 127.0;
+  double angular_vel = (joy_data->right_x ) / 127.0;
 
 
 
 
         // setMotorVoltageCommandPercent maps -1.0 <-> 1.0 to -12000 <-> 12000 milliVolts behind the scenes.
-    rhi_ptr_->setMotorVoltageCommandPercent("Y axis both motor", forward_vel);
-    rhi_ptr_->setMotorVoltageCommandPercent("X axis both motor", angular_vel);
+    rhi_ptr_->setMotorVoltageCommandPercent("left_motor" && "right_motor", forward_vel);
+    rhi_ptr_->setMotorVoltageCommandPercent("right_motor", angular_vel);
 
         // Each motor has a current limit that defaults to zero.
     // This is so we can carefully allocate battery power between systems.
@@ -135,8 +135,8 @@ if (joy_data->btn_r2){
     rhi_ptr_->setMotorCurrentLimitMilliAmps("right_motor", 2500.0);
 
      // Now we can get motor data and print it.
-    double y_axis_motor = rhi_ptr_->getMotorPosition("Y axis both motor");
-    double x_axis_motor = rhi_ptr_->getMotorPosition("X axis both motor");
+    double y_axis_motor = rhi_ptr_->getMotorPosition("left_motor");
+    double x_axis_motor = rhi_ptr_->getMotorPosition("right_motor");
 
     // These are in degrees. Units and other data can be configured in example_hardware_config.yaml.
     std::cout << "Y axis both motor: " << forward_vel << " deg" << std::endl;
@@ -179,7 +179,7 @@ if (joy_data->btn_r2){
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 //Tank Drive Controls
 
-  // // While holding button R2, send motor commands based on joystick values
+  // While holding button R2, send motor commands based on joystick values
   // if (joy_data->btn_r2) {
   //   // Joysticks go from -127 to 127, but motors take a value from -1.0 to 1.0.
   //   double left_wheel_power = joy_data->left_y / 127.0;
