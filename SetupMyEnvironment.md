@@ -129,6 +129,12 @@ Inside the new shell (it should say like, root# or something):
 
 ```bash
 ./scripts/build.sh                # compile the ROS 2 workspace
+```
+This is the infamous part where everything can go wrong depending on your PC/specs. If you stall for more than 20 minutes on this part, LET ONE OF US KNOW AS SOON AS POSSIBLE. Or better yet, put it on onboarding-help. We're working on getting this process shatterproof, trust.
+
+But if you succeed in running the above command, continue and run the following line:
+
+```bash
 ./scripts/launch_sim.sh           # start Gazebo
 ```
 
