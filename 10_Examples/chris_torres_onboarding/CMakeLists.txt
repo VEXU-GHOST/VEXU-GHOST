@@ -12,6 +12,7 @@ set(DEPENDENCIES
   rclcpp
   sensor_msgs
   geometry_msgs
+  std_msgs
   )
 
 # Iterates through the list and finds the packages!
