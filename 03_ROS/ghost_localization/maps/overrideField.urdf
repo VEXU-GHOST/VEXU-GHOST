@@ -1,0 +1,135 @@
+<?xml version="1.0"?>
+<robot name="override_field">
+
+  <!--
+    Static visual of the Push Back field, anchored to the map frame.
+
+    This is a standalone description: its single root link IS "map", so RViz
+    draws the mesh wherever the map frame lives in TF. It is intentionally NOT
+    part of ghost_override.urdf.xacro (that tree is rooted at base_link, and a
+    URDF may only have one root link).
+
+    No robot_state_publisher is run for this. Load it directly in RViz:
+      RobotModel display -> "Description Source: File" -> point at this file
+      Fixed Frame: map
+
+    Extra goal boxes live on this same link (origin + box) — no child links,
+    so no TF / joint required.
+  -->
+
+  <link name="map">
+    <visual>
+      <origin xyz="1.828 1.828 0" rpy="0 0 1.57"/>
+      <geometry>
+        <mesh filename="package://ghost_localization/maps/overrideField.stl"
+              scale="0.0254 0.0254 0.0254"/>
+      </geometry>
+      <material name="field_grey">
+        <color rgba="0.6 0.6 0.6 0.6"/>
+      </material>
+    </visual>
+
+        <!-- long_goal_1_side_1 -->
+    <visual>
+      <origin xyz="3.025 1.419 0.4" rpy="0 0 1.57"/>
+      <geometry>
+        <box size="0.433 0.15 0.15"/>
+      </geometry>
+      <material name="long_goal_1_side_1_mat">
+        <color rgba="1 0 0 0.3"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="3.025 1.419 0.4" rpy="0 0 1.57"/>
+      <geometry>
+        <box size="0.481 0.15 0.15"/>
+      </geometry>
+    </collision>
+
+    <!-- long_goal_1_side_2 -->
+    <visual>
+      <origin xyz="3.025 2.238 0.4" rpy="0 0 1.57"/>
+      <geometry>
+        <box size="0.481 0.15 0.15"/>
+      </geometry>
+      <material name="long_goal_1_side_2_mat">
+        <color rgba="1 0.5 0 0.3"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="3.025 2.238 0.4" rpy="0 0 1.57"/>
+      <geometry>
+        <box size="0.481 0.15 0.15"/>
+      </geometry>
+    </collision>
+
+        <!-- long_goal_2_side_1 -->
+    <visual>
+      <origin xyz="0.64 1.419 0.4" rpy="0 0 1.57"/>
+      <geometry>
+        <box size="0.481 0.15 0.15"/>
+      </geometry>
+      <material name="long_goal_2_side_1_mat">
+        <color rgba="1 0 0 0.3"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.64 1.419 0.4" rpy="0 0 1.57"/>
+      <geometry>
+        <box size="0.481 0.15 0.15"/>
+      </geometry>
+    </collision>
+
+    <!-- long_goal_2_side_2 -->
+    <visual>
+      <origin xyz="0.64 2.238 0.4" rpy="0 0 1.57"/>
+      <geometry>
+        <box size="0.481 0.15 0.15"/>
+      </geometry>
+      <material name="long_goal_2_side_2_mat">
+        <color rgba="1 0.5 0 0.3"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.64 2.238 0.4" rpy="0 0 1.57"/>
+      <geometry>
+        <box size="0.481 0.15 0.15"/>
+      </geometry>
+    </collision>
+
+    <!-- center_goal_high -->
+    <visual>
+      <origin xyz="1.828 1.828 0.25" rpy="0 0 0.785398163"/>
+      <geometry>
+        <box size="0.56 0.125 0.125"/>
+      </geometry>
+      <material name="center_goal_high_mat">
+        <color rgba="0 0.3 1 0.3"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="1.828 1.828 0.25" rpy="0 0 0.785398163"/>
+      <geometry>
+        <box size="0.56 0.125 0.125"/>
+      </geometry>
+    </collision>
+    
+    <!-- center_goal_low -->
+    <visual>
+      <origin xyz="1.828 1.828 0.075" rpy="0 0 -0.785398163"/>
+      <geometry>
+        <box size="0.56 0.125 0.125"/>
+      </geometry>
+      <material name="center_goal_low_mat">
+        <color rgba="0 0.3 1 0.3"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="1.828 1.828 0.075" rpy="0 0 -0.785398163"/>
+      <geometry>
+        <box size="0.56 0.125 0.125"/>
+      </geometry>
+    </collision>
+  </link>
+
+</robot>
