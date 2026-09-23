@@ -66,7 +66,18 @@ void GhostExampleRobot::teleop(double current_time)
   }
 
   auto joy_data = rhi_ptr_->getMainJoystickData();
+////////////////////////////////////////////////////////////////////
 
+
+
+
+
+
+
+
+
+
+  /////////////////////////////////////////////////////////
   if (joy_data->btn_a) {
     std::cout << "Button A!" << std::endl;
   } else if (joy_data->btn_b) {
@@ -99,6 +110,74 @@ void GhostExampleRobot::teleop(double current_time)
     std::cout << "Right Y: " << joy_data->right_y << std::endl;
     std::cout << std::endl;
   }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Arcade Drive Controls
+
+if (joy_data->btn_r2){
+
+  // Adding both left y axis and right y axis
+  double forward_vel = (joy_data->left_y + joy_data->right_y)  / 127.0;
+  //Adding both right x axis and left x axis
+  double angular_vel = (joy_data->right_x + joy_data->left_x ) / 127.0;
+
+
+
+
+        // setMotorVoltageCommandPercent maps -1.0 <-> 1.0 to -12000 <-> 12000 milliVolts behind the scenes.
+    rhi_ptr_->setMotorVoltageCommandPercent("Y axis both motor", forward_vel);
+    rhi_ptr_->setMotorVoltageCommandPercent("X axis both motor", angular_vel);
+
+        // Each motor has a current limit that defaults to zero.
+    // This is so we can carefully allocate battery power between systems.
+    // If we don't set these, the motors will be extremely weak, if they move at all.
+    rhi_ptr_->setMotorCurrentLimitMilliAmps("left_motor", 2500.0);
+    rhi_ptr_->setMotorCurrentLimitMilliAmps("right_motor", 2500.0);
+
+     // Now we can get motor data and print it.
+    double y_axis_motor = rhi_ptr_->getMotorPosition("Y axis both motor");
+    double x_axis_motor = rhi_ptr_->getMotorPosition("X axis both motor");
+
+    // These are in degrees. Units and other data can be configured in example_hardware_config.yaml.
+    std::cout << "Y axis both motor: " << forward_vel << " deg" << std::endl;
+    std::cout << "X axis both motor: " << angular_vel << " deg" << std::endl;
+    std::cout << std::endl;
+
+  //dead zone
+  double threshold = 0.05;
+  forward_vel = (std::fabs(forward_vel) < threshold) ? 0.0 : forward_vel;
+  angular_vel = (std::fabs(angular_vel) < threshold) ? 0.0 : angular_vel;
+
+} else {
+   // Don't forget to turn motors off!
+    rhi_ptr_->setMotorVoltageCommandPercent("left_motor", 0.0);
+    rhi_ptr_->setMotorVoltageCommandPercent("right_motor", 0.0);
+
+    rhi_ptr_->setMotorCurrentLimitMilliAmps("left_motor", 0.0);
+    rhi_ptr_->setMotorCurrentLimitMilliAmps("right_motor", 0.0);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+//Tank Drive Controls
 
   // While holding button R2, send motor commands based on joystick values
   if (joy_data->btn_r2) {
