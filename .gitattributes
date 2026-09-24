@@ -8,5 +8,5 @@
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
 # YOLO / TensorRT weights — stored via Git LFS, not in git object history.
-11_Robots/override_cv/models/*.pt filter=lfs diff=lfs merge=lfs -text
-11_Robots/override_cv/models/*.engine filter=lfs diff=lfs merge=lfs -text
+11_Robots/*/models/*.pt filter=lfs diff=lfs merge=lfs -text
+11_Robots/*/models/*.engine filter=lfs diff=lfs merge=lfs -text
