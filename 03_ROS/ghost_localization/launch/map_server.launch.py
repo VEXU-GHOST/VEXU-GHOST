@@ -39,7 +39,7 @@ def generate_launch_description():
                 "base_params_file",
                 default_value=os.path.join(
                     os.path.expanduser("~"), "VEXU_GHOST", "11_Robots",
-                    "ghost_override", "config", "nav2_config.yaml",
+                    "ghost_tank", "config", "nav2_config.yaml",
                 ),
             ),
             map_server,
