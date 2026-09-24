@@ -26,7 +26,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "goal_regions_file",
             default_value=os.path.join(
-                get_package_share_directory("override_cv"),
+                get_package_share_directory("push_back_cv"),
                 "config",
                 "goal_regions.yaml",
             ),
@@ -35,7 +35,7 @@ def generate_launch_description():
 
         # 1. Perception: YOLO + aligned depth -> map-frame detections (/cv/detections)
         Node(
-            package="override_cv",
+            package="push_back_cv",
             executable="cv_detector_array.py",
             name="cv_detector_array",
             output="screen",
@@ -43,7 +43,7 @@ def generate_launch_description():
 
         # 2. Tracking: detections -> persistent field blocks (/field/blocks)
         Node(
-            package="override_cv",
+            package="push_back_cv",
             executable="block_map_node.py",
             name="block_map",
             output="screen",
@@ -51,7 +51,7 @@ def generate_launch_description():
 
         # 3. Goals: blocks -> per-goal counts + control (/field/goals)
         Node(
-            package="override_cv",
+            package="push_back_cv",
             executable="goal_reader_node",
             name="goal_reader",
             output="screen",

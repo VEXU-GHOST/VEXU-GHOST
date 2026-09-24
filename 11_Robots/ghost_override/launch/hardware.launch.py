@@ -175,12 +175,12 @@ def generate_launch_description():
     # goal_reader), publishing /field/goals for the behavior tree. Consumes the
     # RealSense color/aligned-depth/camera_info topics, so enable realsense_node
     # (with depth + color) below for this to receive data.
-    override_cv_launch = IncludeLaunchDescription(
+    push_back_cv_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
-                get_package_share_directory("override_cv"),
+                get_package_share_directory("push_back_cv"),
                 "launch",
-                "override_cv.launch.py",
+                "push_back_cv.launch.py",
             )
         ),
     )
@@ -279,7 +279,7 @@ def generate_launch_description():
         planner_lifecycle_manager,
         rplidar_node,
         # realsense_node,
-        # override_cv_launch,
+        # push_back_cv_launch,
         bag_recorder_service,
         inter_robot_comms_node,
         # tts_music_node,

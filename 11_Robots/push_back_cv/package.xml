@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>override_cv</name>
+  <name>push_back_cv</name>
   <version>0.0.0</version>
   <description>YOLO + depth CV detections for VEX push-back field perception</description>
   <maintainer email="hasifshaikh02@gmail.com">has02</maintainer>
