@@ -24,3 +24,13 @@ fi
 [ -d "build" ] && sudo rm -r build/
 [ -d "install" ] && sudo rm -r install/
 [ -d "log" ] && sudo rm -r log/
+
+# A full clean covers the V5 PROS project too, since its build artifacts and its
+# generated robot_config.hpp are just as stale as the ROS ones. Skipped by the
+# per-package clean above, which only targets colcon packages.
+if [ -d "$VEXU_HOME/02_V5/ghost_pros" ]
+then
+    bash "$VEXU_HOME/scripts/build/pros_clean.sh"
+fi
+
+exit 0

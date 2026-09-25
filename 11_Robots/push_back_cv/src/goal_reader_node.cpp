@@ -148,7 +148,7 @@ private:
     out.header.stamp = now();
     out.header.frame_id = "map";
 
-    std::vector<std::vector<const override_cv::msg::FieldBlock *>> blocks_by_region(
+    std::vector<std::vector<const push_back_cv::msg::FieldBlock *>> blocks_by_region(
       goals_.size());
 
     for (const auto & block : msg->blocks) {
