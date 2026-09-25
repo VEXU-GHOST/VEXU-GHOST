@@ -2,7 +2,7 @@
 # Set port to the V5 smart port wired to the radio; port 0 (or omitting this block) disables the relay.
 inter_robot_link:
     port: 16
-    link_id: "ghost_push_back_link"
+    link_id: "ghost_override_link"
     is_transmitter: true
 
 port_configuration:

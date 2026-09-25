@@ -25,14 +25,14 @@ def resolve_serial(pattern, fallback):
 
 
 def generate_launch_description():
-    ghost_push_back_base_dir = os.path.join(os.path.expanduser("~"), "VEXU_GHOST", "11_Robots", "ghost_push_back")
+    ghost_override_base_dir = os.path.join(os.path.expanduser("~"), "VEXU_GHOST", "11_Robots", "ghost_override")
 
     # This contains parameters shared between both robots
-    base_ros_config_file = os.path.join(ghost_push_back_base_dir, "config/base_ros_config.yaml")
+    base_ros_config_file = os.path.join(ghost_override_base_dir, "config/base_ros_config.yaml")
 
     # nav2 stack config (map_server, planner_server + global_costmap,
     # controller_server + local_costmap), split out of base_ros_config.yaml.
-    nav2_config_file = os.path.join(ghost_push_back_base_dir, "config/nav2_config.yaml")
+    nav2_config_file = os.path.join(ghost_override_base_dir, "config/nav2_config.yaml")
 
     #############################
     ### Base Node Definitions ###
@@ -58,7 +58,7 @@ def generate_launch_description():
     # Publish the robot transform tree (base_link -> sensor frames) from the URDF
     # so rviz, costmaps, and the particle filter share one source of truth for
     # sensor poses.
-    urdf_path = os.path.join(ghost_push_back_base_dir, "urdf", "ghost_push_back.urdf.xacro")
+    urdf_path = os.path.join(ghost_override_base_dir, "urdf", "ghost_override.urdf.xacro")
     robot_state_publisher = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
@@ -213,11 +213,11 @@ def generate_launch_description():
             # competition state machine. Per-robot; threaded down to the
             # per-robot launch -> competition_state_machine_node.
             init_config_file = os.path.join(
-                ghost_push_back_base_dir, "config", robot_name, robot_name + "_init_config.yaml")
+                ghost_override_base_dir, "config", robot_name, robot_name + "_init_config.yaml")
 
             robot_launch = IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    os.path.join(ghost_push_back_base_dir, "launch", robot_name, robot_name + ".launch.py")
+                    os.path.join(ghost_override_base_dir, "launch", robot_name, robot_name + ".launch.py")
                 ),
                 launch_arguments={'base_params_file': base_ros_config_file,
                                   'init_config_file': init_config_file,
@@ -228,9 +228,9 @@ def generate_launch_description():
             # auto-detected Pico path (overrides the base fallback). The device
             # map (what sensors, where) is the per-robot sensor host yaml.
             ros_config_file = os.path.join(
-                ghost_push_back_base_dir, "config", robot_name, robot_name + "_ros_config.yaml")
+                ghost_override_base_dir, "config", robot_name, robot_name + "_ros_config.yaml")
             sensor_host_config = os.path.join(
-                ghost_push_back_base_dir, "config", robot_name, robot_name + "_sensor_host_config.yaml")
+                ghost_override_base_dir, "config", robot_name, robot_name + "_sensor_host_config.yaml")
             sensor_host_node = Node(
                 package="ghost_ros_interfaces",
                 executable="jetson_sensor_host_serial_node",

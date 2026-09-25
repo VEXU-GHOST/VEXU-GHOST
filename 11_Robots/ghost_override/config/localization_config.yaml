@@ -35,7 +35,7 @@
       init_angles_per_position: 9
       # Field box in the MAP frame (corner-origin map): the Push Back field is
       # 144 in = 3.6576 m square with its center at (1.828, 1.828), matching the
-      # field mesh anchor in maps/pushBackField.urdf.
+      # field mesh anchor in maps/overrideField.urdf.
       init_uniform_center_x: 1.828
       init_uniform_center_y: 1.828
       init_uniform_width: 3.6576
@@ -77,7 +77,7 @@ ekf_pf_node:
       # Robot Constants
       # NOTE: the lidar offset (laser_offset_x/y, laser_angle_offset) now comes
       # from TF (base_link -> lidar_link, published by robot_state_publisher from
-      # the URDF). See 11_Robots/ghost_push_back/urdf/ghost_push_back.urdf.xacro.
+      # the URDF). See 11_Robots/ghost_override/urdf/ghost_override.urdf.xacro.
 
       # RPLidar A1 datasheet
       range_min: 0.15

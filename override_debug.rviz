@@ -291,7 +291,7 @@ Visualization Manager:
     - Alpha: 1
       Class: rviz_default_plugins/RobotModel
       Collision Enabled: false
-      Description File: /home/karmanyaahm/VEXU_GHOST/03_ROS/ghost_localization/maps/pushBackField.urdf
+      Description File: /home/karmanyaahm/VEXU_GHOST/03_ROS/ghost_localization/maps/overrideField.urdf
       Description Source: File
       Description Topic:
         Depth: 5
