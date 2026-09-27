@@ -21,10 +21,10 @@ ROBOT_NAME="$(cat /etc/ghost/robot_name 2>/dev/null)"
 if [ -z "$ROBOT_NAME" ];
 then
     echo "robot name is unset (/etc/ghost/robot_name)... exiting";
-    # ros2 launch ghost_push_back hardware.launch.py 2>&1 | tee /dev/tty |& logger;
+    # ros2 launch ghost_override hardware.launch.py 2>&1 | tee /dev/tty |& logger;
 else echo "robot name is set to '$ROBOT_NAME'";
-    ros2 launch ghost_push_back hardware.launch.py robot_name:=$ROBOT_NAME 2>&1 | tee /dev/tty |& logger;
+    ros2 launch ghost_override hardware.launch.py robot_name:=$ROBOT_NAME 2>&1 | tee /dev/tty |& logger;
 fi
 
-logger "RUNNING ros2 launch ghost_push_back DONE"
+logger "RUNNING ros2 launch ghost_override DONE"
 logger ${PIPESTATUS}

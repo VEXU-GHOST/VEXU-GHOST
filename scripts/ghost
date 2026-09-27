@@ -12,9 +12,9 @@ DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 # build, and set-robot-name are available.
 if [ ! -s /etc/ghost/robot_name ]; then
     case "$1" in
-        run|kill|build|clean|set-robot-name) ;;
+        run|kill|build|clean|pros-clean|set-robot-name) ;;
         *)
-            echo "ghost $1: no robot name set (/etc/ghost/robot_name); only run/kill/build/clean/set-robot-name are available off-robot"
+            echo "ghost $1: no robot name set (/etc/ghost/robot_name); only run/kill/build/clean/pros-clean/set-robot-name are available off-robot"
             exit 1
             ;;
     esac
@@ -77,6 +77,10 @@ case "$1" in
         shift
         exec "$DIR/build/clean.sh" "$@"
         ;;
+    "pros-clean")
+        echo "Cleaning PROS project"
+        exec "$DIR/build/pros_clean.sh"
+        ;;
     "install")
         echo "Installing ghost services"
         systemctl --user link $DIR/hardware/*service
@@ -100,7 +104,7 @@ case "$1" in
         exec journalctl -xe --user-unit ghost-hardware
         ;;
     *)
-        echo "Usage: ghost [run [--v5]/build [pkg...]/clean [pkg...]/start/restart/stop/kill/shutdown/install/configure-os/set-robot-name <name>/log]"
+        echo "Usage: ghost [run [--v5]/build [pkg...]/clean [pkg...]/pros-clean/start/restart/stop/kill/shutdown/install/configure-os/set-robot-name <name>/log]"
         ;;
 esac
 

@@ -1,5 +1,5 @@
 # Goal prism bounds in map frame (meters).
-# Derived from pushBackField.urdf collision boxes — keep in sync when URDF changes.
+# Derived from overrideField.urdf collision boxes — keep in sync when URDF changes.
 #
 # Long goal outers: yaw 90° → 0.481 m along Y, 0.15 m along X/Z (13.33" middle omitted).
 # Center goals: yaw ±45° → axis-aligned bbox of 0.56 × 0.125 × 0.125 m box.
