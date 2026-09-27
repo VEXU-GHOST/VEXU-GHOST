@@ -66,7 +66,7 @@ enum class DriveMode {
 void GhostExampleRobot::teleop(double current_time)
 {
   constexpr double wheelDiameterInches = 3.25;
-  constexpr double trackWidthInches = 12.0;
+  constexpr double trackWidthInches = 8.0;
   constexpr double pi = 3.14159265358979323846;
 
   constexpr double wheelCircumferenceInches = pi*wheelDiameterInches;
