@@ -25,7 +25,7 @@
 #include <cmath>
 #include <bits/stdc++.h>
 #include <ghost_tank/tank_model.hpp>
-#include <ghost_tank/pinky_plugin.hpp>
+#include <ghost_tank/clyde_plugin.hpp>
 #include <ghost_util/angle_util.hpp>
 #include <ghost_util/math_util.hpp>
 #include <ghost_util/unit_conversion_utils.hpp>
@@ -47,14 +47,14 @@ using JoyPtr = std::shared_ptr<ghost_v5_interfaces::devices::JoystickDeviceData>
 namespace ghost_tank
 {
 
-PinkyPlugin::PinkyPlugin()
+ClydePlugin::ClydePlugin()
 {
-  std::cout << "PinkyPlugin::PinkyPlugin" << std::endl;
+  std::cout << "ClydePlugin::ClydePlugin" << std::endl;
   populateMotorNames();
   populateDigitalIONames();
 }
 
-void PinkyPlugin::populateMotorNames()
+void ClydePlugin::populateMotorNames()
 {
   m_right_drive_motor_names = {
     "drive_r1",
@@ -88,7 +88,7 @@ void PinkyPlugin::populateMotorNames()
     m_right_drive_motor_names.end());
 }
 
-void PinkyPlugin::populateDigitalIONames()
+void ClydePlugin::populateDigitalIONames()
 {
   digital_io_port_map["sorter"] = 0;
   digital_io_port_map["descorer"] = 1;
@@ -97,7 +97,7 @@ void PinkyPlugin::populateDigitalIONames()
   digital_io_port_map["right_blocker"] = 4;
   digital_io_port_map["little_will"] = 7;
 
-  // climb / shooter / goal_rush solenoids do not physically exist on pinky,
+  // climb / shooter / goal_rush solenoids do not physically exist on clyde,
   // but the autonomous() pneumatics block still references them. Without explicit
   // entries, operator[] would default-insert them at port 0 and clobber the sorter
   // every loop. Park them on bit 5 (F), an output with no mechanism assigned, so
@@ -114,9 +114,9 @@ void PinkyPlugin::populateDigitalIONames()
 /// Initialization ///
 //////////////////////
 
-void PinkyPlugin::initialize()
+void ClydePlugin::initialize()
 {
-  std::cout << "PinkyPlugin::initialize" << std::endl;
+  std::cout << "ClydePlugin::initialize" << std::endl;
   TankRobotPlugin::initialize();
   // TankRobotPlugin::initROSComms();
   // TankRobotPlugin::initEstimation();
@@ -126,11 +126,11 @@ void PinkyPlugin::initialize()
   // TankRobotPlugin::resetWorldPose();
 }
 
-void PinkyPlugin::disabled()
+void ClydePlugin::disabled()
 {
 }
 
-void PinkyPlugin::autonomous(double current_time)
+void ClydePlugin::autonomous(double current_time)
 {
   if (m_is_first_auton_loop) {
     // m_is_first_auton_loop = false;
@@ -176,7 +176,7 @@ void PinkyPlugin::autonomous(double current_time)
   rhi_ptr_->setDigitalOut(digital_io_port_map["little_will"], bt_->get_variable<bool>("little_will_active"));
 }
 
-void PinkyPlugin::teleop(double current_time)
+void ClydePlugin::teleop(double current_time)
 {
   auto joy_data = rhi_ptr_->getMainJoystickData();
   bool shift_r = joy_data->btn_b;
@@ -188,7 +188,7 @@ void PinkyPlugin::teleop(double current_time)
   updateT1Climb(joy_data->btn_r1, joy_data->btn_r2, shift_r);
 }
 
-void PinkyPlugin::updateT1Climb(bool up, bool down, bool enabled)
+void ClydePlugin::updateT1Climb(bool up, bool down, bool enabled)
 {
   return;
   if (enabled) {
@@ -201,7 +201,7 @@ void PinkyPlugin::updateT1Climb(bool up, bool down, bool enabled)
 }
 
 
-void PinkyPlugin::updateScissor(bool up, bool down, bool enabled)
+void ClydePlugin::updateScissor(bool up, bool down, bool enabled)
 {
   return;
   rhi_ptr_->setDigitalOut(digital_io_port_map["shooter"], false);
@@ -228,4 +228,4 @@ void PinkyPlugin::updateScissor(bool up, bool down, bool enabled)
 
 } // namespace ghost_tank
 
-PLUGINLIB_EXPORT_CLASS(ghost_tank::PinkyPlugin, ghost_ros_interfaces::V5RobotBase)
+PLUGINLIB_EXPORT_CLASS(ghost_tank::ClydePlugin, ghost_ros_interfaces::V5RobotBase)

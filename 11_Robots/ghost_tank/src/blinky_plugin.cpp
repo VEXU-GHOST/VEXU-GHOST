@@ -25,7 +25,7 @@
 #include <cmath>
 #include <bits/stdc++.h>
 #include <ghost_tank/tank_model.hpp>
-#include <ghost_tank/inky_plugin.hpp>
+#include <ghost_tank/blinky_plugin.hpp>
 #include <ghost_util/angle_util.hpp>
 #include <ghost_util/math_util.hpp>
 #include <ghost_util/unit_conversion_utils.hpp>
@@ -46,13 +46,13 @@ using JoyPtr = std::shared_ptr<ghost_v5_interfaces::devices::JoystickDeviceData>
 namespace ghost_tank
 {
 
-InkyPlugin::InkyPlugin()
+BlinkyPlugin::BlinkyPlugin()
 {
   populateMotorNames();
   populateDigitalIONames();
 }
 
-void InkyPlugin::populateMotorNames()
+void BlinkyPlugin::populateMotorNames()
 {
   m_right_drive_motor_names = {
     "drive_r1",
@@ -86,7 +86,7 @@ void InkyPlugin::populateMotorNames()
     m_right_drive_motor_names.end());
 }
 
-void InkyPlugin::populateDigitalIONames()
+void BlinkyPlugin::populateDigitalIONames()
 {
   digital_io_port_map["sorter"] = 0;
   digital_io_port_map["descorer"] = 1;
@@ -95,7 +95,7 @@ void InkyPlugin::populateDigitalIONames()
   digital_io_port_map["right_blocker"] = 4;
   digital_io_port_map["little_will"] = 7;
 
-  // climb / shooter / goal_rush solenoids do not physically exist on pinky,
+  // climb / shooter / goal_rush solenoids do not physically exist on clyde,
   // but the autonomous() pneumatics block still references them. Without explicit
   // entries, operator[] would default-insert them at port 0 and clobber the sorter
   // every loop. Park them on bit 5 (F), an output with no mechanism assigned, so
@@ -112,9 +112,9 @@ void InkyPlugin::populateDigitalIONames()
 /// Initialization ///
 //////////////////////
 
-void InkyPlugin::initialize()
+void BlinkyPlugin::initialize()
 {
-  std::cout << "InkyPlugin::initialize" << std::endl;
+  std::cout << "BlinkyPlugin::initialize" << std::endl;
   TankRobotPlugin::initialize();
   // TankRobotPlugin::initROSComms();
   // TankRobotPlugin::initEstimation();
@@ -125,9 +125,9 @@ void InkyPlugin::initialize()
   // TankRobotPlugin::resetWorldPose();
 }
 
-void InkyPlugin::initNeutralStakeArm()
+void BlinkyPlugin::initNeutralStakeArm()
 {
-  std::cout << "[InkyPlugin::initNeutralStakeArm]" << std::endl;
+  std::cout << "[BlinkyPlugin::initNeutralStakeArm]" << std::endl;
 
   node_ptr_->declare_parameter("tank_robot_plugin.neutral_stake_arm_kp", 0.0);
   node_ptr_->declare_parameter("tank_robot_plugin.neutral_stake_arm_gear_ratio", 0.0);
@@ -152,11 +152,11 @@ void InkyPlugin::initNeutralStakeArm()
   m_neutral_stake_arm_des_pos = m_neutral_stake_arm_rest_pos_deg;
 }
 
-void InkyPlugin::disabled()
+void BlinkyPlugin::disabled()
 {
 }
 
-void InkyPlugin::autonomous(double current_time)
+void BlinkyPlugin::autonomous(double current_time)
 {
   if (m_is_first_auton_loop) {
     // m_is_first_auton_loop = false;
@@ -205,7 +205,7 @@ void InkyPlugin::autonomous(double current_time)
   rhi_ptr_->setDigitalOut(digital_io_port_map["little_will"], bt_->get_variable<bool>("little_will_active"));
 }
 
-void InkyPlugin::teleop(double current_time)
+void BlinkyPlugin::teleop(double current_time)
 {
   auto joy_data = rhi_ptr_->getMainJoystickData();
   bool shift1 = joy_data->btn_b;
@@ -219,14 +219,14 @@ void InkyPlugin::teleop(double current_time)
   updateNeutralStakeArmController(joy_data->btn_l1, joy_data->btn_l2, shift1); // Y-held mode
 }
 
-bool InkyPlugin::updateNeutralStakeArmPosition(int arm_mode)
+bool BlinkyPlugin::updateNeutralStakeArmPosition(int arm_mode)
 {
   // Neutral stake arm motors not present on this robot
   (void)arm_mode;
   return true;
 }
 
-void InkyPlugin::updateNeutralStakeArmController(bool up_btn, bool down_btn, bool active)
+void BlinkyPlugin::updateNeutralStakeArmController(bool up_btn, bool down_btn, bool active)
 {
   // Neutral stake arm motors not present on this robot
   (void)up_btn;
@@ -236,4 +236,4 @@ void InkyPlugin::updateNeutralStakeArmController(bool up_btn, bool down_btn, boo
 
 } // namespace ghost_tank
 
-PLUGINLIB_EXPORT_CLASS(ghost_tank::InkyPlugin, ghost_ros_interfaces::V5RobotBase)
+PLUGINLIB_EXPORT_CLASS(ghost_tank::BlinkyPlugin, ghost_ros_interfaces::V5RobotBase)
