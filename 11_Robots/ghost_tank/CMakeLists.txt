@@ -213,6 +213,8 @@ set(NODES
   outtakeBalls
   match_loading
   descorer
+  arm_pos
+  lift_pos
 )
 
 foreach(NODE ${NODES})

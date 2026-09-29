@@ -77,9 +77,6 @@ competition_state_machine_node:
         integral_limit: 0.75
         integral_activation_bound: 0.2
 
-      # Arm (TankRobotPlugin::updateArm). 3-stage PID position control on
-      # arm_motor, cycled by L2. Tune kp/ki/kd here, and set the three target
-      # positions (motor encoder degrees) once measured on the robot.
       arm:
         kp: 1.0
         ki: 0.0000
@@ -87,6 +84,14 @@ competition_state_machine_node:
         integral_limit: 0.0
         integral_activation_bound: 0.0
       arm_stage_positions_deg: [0.0, 90.0, 180.0]
+
+      lift:
+        kp: 0.0
+        ki: 0.0
+        kd: 0.0
+        integral_limit: 0.0
+        integral_activation_bound: 0.0
+      lift_stage_positions_deg: [0.0, 0.0, 0.0, 0.0, 0.0]
 
       # Auto-sort (TankRobotPlugin::autoSort / AutoSortCmd). Detect on the
       # mid_conveyor colour sensor -- the sorter_hood sensor is not plugged in on

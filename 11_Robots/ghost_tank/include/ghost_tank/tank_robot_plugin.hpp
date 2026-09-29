@@ -77,6 +77,7 @@ protected:
   void initEstimation();
   void initIntake();
   void initArm();
+  void initLift();
   void initTankModel();
   void initAutonomy();
   ghost_control::PIDConfig loadPIDConfig(const std::string & param_prefix);
@@ -128,6 +129,25 @@ protected:
    */
   void updateArm(bool l2_pressed);
   void updateArmFromJoystick(JoyPtr joy_data);
+
+  /**
+   * @brief Drives arm_motor to the given preset stage (0-2) and holds it
+   * there with the arm PID controller. Shared by teleop's L2 cycling
+   * (updateArm) and auton's ArmPosCmd BT node.
+   *
+   * @param stage index into m_arm_stage_positions_deg
+   */
+  void updateArmToStage(size_t stage);
+
+  /**
+   * @brief Drives lift1_motor/lift2_motor to the given preset stage (0-4)
+   * and holds it there with the lift PID controller. Used by auton's
+   * LiftPosCmd BT node; teleop still drives the lift with raw up/down power
+   * (updateLift).
+   *
+   * @param stage index into m_lift_stage_positions_deg
+   */
+  void updateLiftToStage(size_t stage);
   void toggleBite(bool signal);
 
   void updateDescore(bool open);
@@ -261,6 +281,8 @@ protected:
   std::shared_ptr<ghost_control::PIDController> m_arm_controller_ptr;
   std::vector<double> m_arm_stage_positions_deg{0.0, 0.0, 0.0};
   size_t m_arm_stage{0};
+  std::shared_ptr<ghost_control::PIDController> m_lift_controller_ptr;
+  std::vector<double> m_lift_stage_positions_deg{0.0, 0.0, 0.0, 0.0, 0.0};
 
   // Autonomy
   std::string bt_path_;
