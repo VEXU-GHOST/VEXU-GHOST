@@ -4,12 +4,12 @@ port_configuration:
     B: OUT
   devices:
     left_motor:
-      port: 1
+      port: 19
       type: MOTOR
       reversed: false
       config: drive_motor_config
     right_motor:
-      port: 2
+      port: 20
       type: MOTOR
       reversed: true
       config: drive_motor_config
