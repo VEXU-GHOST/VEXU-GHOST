@@ -95,3 +95,44 @@ sudo usermod -a -G dialout $USER
 ```
 
 </details>
+
+## Foxglove connection
+
+The example hardware, competition hardware, and example simulation launches start
+one Foxglove Bridge automatically on port 8765. Do not start another bridge on that
+port alongside them. Native setup installs `ros-humble-foxglove-bridge` through
+`scripts/update_dependencies.sh`; the Docker image installs it with apt as well.
+The three launch packages also declare it as a runtime dependency for rosdep.
+
+After sourcing your normal environment, the repository CLI is available:
+
+```bash
+source "$VEXU_HOME/scripts/setup_env.sh"
+ghost foxglove-url            # ws://orinx.local:8765
+ghost foxglove-url localhost  # ws://localhost:8765 for local simulation
+```
+
+You can also run `./scripts/ghost foxglove-url` directly from the repository.
+In Foxglove, select Open connection, choose Foxglove WebSocket, and paste the URL.
+The command prints an address; it does not start the bridge or test connectivity.
+`orinx.local` must resolve to the robot computer, and your laptop must be able to
+reach its port 8765. An alternative hostname or IPv4 address can be passed as the
+optional host argument. This does not configure the robot hostname or mDNS.
+
+For local simulation:
+
+```bash
+./scripts/launch_sim.sh
+# Headless alternative for diagnostics:
+./scripts/launch_sim.sh sim_gui:=false rviz:=false
+```
+
+Docker publishes port 8765 to the host; recreate the dev container after changing
+Compose configuration, and rebuild its image after dependency changes.
+ROS runs inside the container, while Foxglove can run on the host.
+
+Before the physical Baby Jerry test, stop any manual bridge, restart the sim with
+only its normal launch, and verify that Foxglove receives ROS topics. A 3D panel can
+use `/robot_description`, `/tf`, and `/tf_static`; sensor panels require the
+corresponding sensor topics to be published. Gazebo must be running for physics.
+The physical Baby Jerry test is intentionally deferred until after the next task.

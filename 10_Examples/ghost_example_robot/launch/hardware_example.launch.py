@@ -50,9 +50,17 @@ def generate_launch_description():
         arguments=[plugin_type, robot_name],
     )
 
+    foxglove_bridge = Node(
+        package="foxglove_bridge",
+        executable="foxglove_bridge",
+        name="foxglove_bridge",
+        output="screen",
+        parameters=[{"address": "0.0.0.0", "port": 8765}],
+    )
     return LaunchDescription(
         [
             serial_node,
             competition_state_machine_node,
+            foxglove_bridge,
         ]
     )

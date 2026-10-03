@@ -117,9 +117,9 @@ void GhostExampleRobot::teleop(double current_time)
 if (joy_data->btn_r2){
 
   // Adding both left y axis and right y axis
-  double forward_vel = (joy_data->left_y + joy_data->right_y)  / 127.0;
+  double forward_vel = (joy_data->left_y)  / 127.0;
   //Adding both right x axis and left x axis
-  double angular_vel = (joy_data->right_x + joy_data->left_x ) / 127.0;
+  double angular_vel = (joy_data->right_x ) / 127.0;
 
 
 

@@ -13,7 +13,7 @@
   <depend>ghost_ros_interfaces</depend>
   <depend>pluginlib</depend>
   <depend>rclcpp</depend>
-
+  <exec_depend>foxglove_bridge</exec_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

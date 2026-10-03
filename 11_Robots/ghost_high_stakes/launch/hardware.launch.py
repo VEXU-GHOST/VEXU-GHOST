@@ -94,12 +94,20 @@ def generate_launch_description():
             )
             return [robot_launch]
 
+    foxglove_bridge = Node(
+        package="foxglove_bridge",
+        executable="foxglove_bridge",
+        name="foxglove_bridge",
+        output="screen",
+        parameters=[{"address": "0.0.0.0", "port": 8765}],
+    )
     return LaunchDescription([
         DeclareLaunchArgument("robot_name", default_value="None"),
         rplidar_node,
         # realsense_node,
         bag_recorder_service,
         # tts_music_node,
+        foxglove_bridge,
         OpaqueFunction(function = launch_setup),
     ])
 
