@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Print the connection address; ROS launch starts the bridge separately.
+set -euo pipefail
+
+usage() {
+    printf '%s\n' 'Usage: ghost foxglove-url [host]' 'Default host: orinx.local; use localhost for local simulation.'
+}
+
+case "${1:-}" in
+    foxglove-url)
+        if (( $# > 2 )); then
+            usage >&2
+            exit 2
+        fi
+        host="${2:-orinx.local}"
+        if [[ ! "$host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]; then
+            printf '%s\n' 'Host must be a hostname or IPv4 address, without ws:// or a port.' >&2
+            exit 2
+        fi
+        printf 'ws://%s:8765\n' "$host"
+        ;;
+    help|--help|-h|"")
+        usage
+        ;;
+    *)
+        printf 'Unknown command: %s\n' "$1" >&2
+        usage >&2
+        exit 2
+        ;;
+esac
