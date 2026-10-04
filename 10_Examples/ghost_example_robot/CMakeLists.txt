@@ -11,6 +11,9 @@ set(DEPENDENCIES
   rclcpp
   ghost_ros_interfaces
   pluginlib
+  nav_msgs
+  geometry_msgs
+  tf2_ros
   )
 
 # Iterates through the list and finds the packages!
@@ -77,6 +80,7 @@ install(
 install(DIRECTORY
   config
   launch
+  urdf
   DESTINATION share/${PROJECT_NAME})
 
 pluginlib_export_plugin_description_file(ghost_ros_interfaces plugins.xml)

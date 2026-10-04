@@ -20,6 +20,11 @@ def generate_launch_description():
         pkg_dir, "config/example_hardware_config.yaml"
     )
 
+    # Simple robot model; its fixed joints give Foxglove the base_link -> lidar_link transform
+    urdf_path = os.path.join(pkg_dir, "urdf/example_robot.urdf")
+    with open(urdf_path, "r") as urdf_file:
+        robot_description = urdf_file.read()
+
     plugin_type = "ghost_example_robot::GhostExampleRobot"
     robot_name = "EXAMPLE_ROBOT"
 
@@ -50,6 +55,32 @@ def generate_launch_description():
         arguments=[plugin_type, robot_name],
     )
 
+    robot_state_publisher = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        name="robot_state_publisher",
+        output="screen",
+        parameters=[{"robot_description": robot_description}],
+    )
+
+    # Same lidar settings as the competition robots (ghost_override hardware.launch.py)
+    rplidar_node = Node(
+        package="rplidar_ros",
+        executable="rplidar_node",
+        name="rplidar_node",
+        output="screen",
+        parameters=[
+            {
+                "channel_type": "serial",
+                "serial_port": "/dev/ttyUSB0",
+                "serial_baudrate": 256000,
+                "frame_id": "lidar_link",
+                "inverted": False,
+                "angle_compensate": True,
+            }
+        ],
+    )
+
     foxglove_bridge = Node(
         package="foxglove_bridge",
         executable="foxglove_bridge",
@@ -61,6 +92,8 @@ def generate_launch_description():
         [
             serial_node,
             competition_state_machine_node,
+            robot_state_publisher,
+            rplidar_node,
             foxglove_bridge,
         ]
     )

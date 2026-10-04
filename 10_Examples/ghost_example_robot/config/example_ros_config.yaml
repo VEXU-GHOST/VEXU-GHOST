@@ -8,3 +8,10 @@ competition_state_machine_node:
   ros__parameters:
     ghost_robot_example_plugin:
       test_param: "I did it"
+
+    # Wheel odometry published by the example plugin (same values as the competition robots)
+    odometry:
+      odom_topic: "/sensors/wheel_odom"
+      drive_gear_ratio: 1.15      # motor rotations per wheel rotation (23/20)
+      drive_wheel_rad_in: 1.375   # wheel radius, inches
+      wheel_base_inches: 12.6875  # distance between left and right wheels

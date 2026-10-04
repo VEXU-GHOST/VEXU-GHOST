@@ -27,6 +27,10 @@
 #include <ghost_ros_interfaces/competition/v5_robot_base.hpp>
 #include <ghost_ros_interfaces/msg_helpers/msg_helpers.hpp>
 
+#include <memory>
+#include <nav_msgs/msg/odometry.hpp>
+#include <tf2_ros/transform_broadcaster.h>
+
 namespace ghost_example_robot
 {
 
@@ -42,6 +46,20 @@ public:
   void onNewSensorData() override;
 
 protected:
+  // Wheel odometry, same math as ghost_tank's TankOdometry (frames: odom -> base_link)
+  void updateAndPublishOdometry();
+
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+
+  double meters_per_degree_ = 0.0;
+  double wheelbase_m_ = 0.0;
+  bool odom_initialized_ = false;
+  double prev_left_deg_ = 0.0;
+  double prev_right_deg_ = 0.0;
+  double x_ = 0.0;
+  double y_ = 0.0;
+  double theta_ = 0.0;
 };
 
 } // namespace ghost_example_robot

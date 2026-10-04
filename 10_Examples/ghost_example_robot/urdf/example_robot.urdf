@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!--
+  Minimal model of the example robot for Foxglove / RViz.
+  robot_state_publisher publishes the fixed joint below on /tf_static, which gives
+  the lidar's /scan (frame lidar_link) a place on the robot.
+  Measure your robot and update the sizes and the lidar joint origin (meters).
+-->
+<robot name="example_robot">
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.45 0.45 0.10"/>
+      </geometry>
+      <material name="chassis_gray">
+        <color rgba="0.5 0.5 0.5 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <link name="lidar_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.04" length="0.04"/>
+      </geometry>
+      <material name="lidar_black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- Lidar position relative to the robot center: x forward, y left, z up. -->
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <origin xyz="0 0 0.12" rpy="0 0 0"/>
+  </joint>
+
+</robot>
