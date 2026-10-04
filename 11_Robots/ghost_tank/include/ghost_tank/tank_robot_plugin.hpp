@@ -29,11 +29,14 @@
 
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <ghost_msgs/msg/ball_color.hpp>
 #include <ghost_msgs/msg/drivetrain_command.hpp>
 #include <ghost_msgs/msg/robot_trajectory.hpp>
 #include <ghost_msgs/srv/start_recorder.hpp>
 #include <ghost_msgs/srv/stop_recorder.hpp>
+#include <chrono>
 #include <nav_msgs/msg/odometry.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -73,6 +76,8 @@ protected:
   void initROSComms();
   void initEstimation();
   void initIntake();
+  void initArm();
+  void initLift();
   void initTankModel();
   void initAutonomy();
   ghost_control::PIDConfig loadPIDConfig(const std::string & param_prefix);
@@ -81,6 +86,7 @@ protected:
   void updateConveyorPositionSensing();
   void publishIMUData();
   void updateAndPublishOdometry();
+  void odomWatchdogLoop();
   void publishBaseTwist();
   void publishTrajectoryVisualization();
 
@@ -103,16 +109,73 @@ protected:
    * @param R
    * @param current_time
    */
-  void updateIntake(bool R2, bool R1, bool L1, bool R, double current_time);
+  void updateIntake(bool R2, bool R1, bool L1, bool R);
 
-  void updateIntakeFromJoystick(JoyPtr joy_data, bool shift_l, bool shift_r, double current_time);
+  void updateIntakeFromJoystick(JoyPtr joy_data);
   void updateConveyorOnly(bool active);
+
+  void updateLift(bool R2, bool R1);
+  void updateLiftFromJoystick(JoyPtr joy_data);
+
+  /**
+   * @brief Drives the arm to one of three preset positions, cycled by L2.
+   *
+   * Each L2 press (edge-triggered) advances to the next stage (wrapping back
+   * to the first after the last), and a PID controller running on the
+   * arm_motor encoder holds the arm at that stage's target position every
+   * loop.
+   *
+   * @param l2_pressed current state of the L2 button
+   */
+  void updateArm(bool l2_pressed);
+  void updateArmFromJoystick(JoyPtr joy_data);
+
+  /**
+   * @brief Drives arm_motor to the given preset stage (0-2) and holds it
+   * there with the arm PID controller. Shared by teleop's L2 cycling
+   * (updateArm) and auton's ArmPosCmd BT node.
+   *
+   * @param stage index into m_arm_stage_positions_deg
+   */
+  void updateArmToStage(size_t stage);
+
+  /**
+   * @brief Drives lift1_motor/lift2_motor to the given preset stage (0-4)
+   * and holds it there with the lift PID controller. Used by auton's
+   * LiftPosCmd BT node; teleop still drives the lift with raw up/down power
+   * (updateLift).
+   *
+   * @param stage index into m_lift_stage_positions_deg
+   */
+  void updateLiftToStage(size_t stage);
   void toggleBite(bool signal);
 
-  void updateClamp(bool close, bool open, bool shift2);
+  void updateDescore(bool open);
+  void updateMatchLoading(bool input); 
+  void updateScorePos(bool input); 
+  void updateColorSwitcher(bool input); 
+
   void updateGoalRush(bool left_rush, bool right_rush, bool enabled);
 
   void ringDetector(bool active, double current_time, bool want_red, bool store_ring);
+
+  /**
+   * @brief Constantly intakes and auto-sorts out the wrong-colour ball.
+   *
+   * Runs the intake forward every tick. When the classified ball colour
+   * (latest BallColor on the sort topic) is the colour we do NOT want, it waits
+   * m_sort_delay seconds (time for the ball to travel from the sensor to the
+   * sorter), then extends the sorter pneumatic. The sorter then STAYS extended,
+   * diverting every wrong ball (including several in a row, so it never toggles
+   * back and forth wasting air), until a correct-colour ball is detected; it
+   * holds another m_sort_delay so that ball reaches the sorter, then retracts.
+   * The "wrong" colour is the opposite of our team colour (m_color_target_red):
+   * target red -> eject blue.
+   *
+   * @param current_time loop time in seconds (same clock teleop/auton receives)
+   */
+  void autoSort(double current_time);
+
   void updateMusic(double current_time, JoyPtr joy_data);
 
   void updateDrivetrain(JoyPtr joy_data);
@@ -130,6 +193,11 @@ protected:
   void resetWorldPose();
 
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr m_odom_pub;
+
+  // Wheel-odom watchdog: holds the last odom when V5 sensor updates go stale.
+  rclcpp::TimerBase::SharedPtr m_odom_watchdog_timer;
+  nav_msgs::msg::Odometry m_last_odom_msg;
+  std::chrono::steady_clock::time_point m_last_sensor_time;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr m_joint_state_pub;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr m_tank_viz_pub;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr m_trajectory_viz_pub;
@@ -169,6 +237,25 @@ protected:
   std::string m_color;
   double m_first_color_detect_inches = INFINITY;
 
+  // Auto-sort: latest classified ball colour (ghost_msgs::msg::BallColor enum:
+  // NONE=0, RED=1, BLUE=2, UNSURE=3) from the sorter's colour sensor.
+  rclcpp::Subscription<ghost_msgs::msg::BallColor>::SharedPtr m_sort_color_sub;
+  void sortColorCallback(const ghost_msgs::msg::BallColor::SharedPtr msg)
+  {
+    m_sort_color = msg->color;
+  }
+  uint8_t m_sort_color = ghost_msgs::msg::BallColor::NONE;
+
+  // Auto-sort state machine (see autoSort()).
+  enum class SortState { INTAKING, DELAY, FIRING, RETRACT_DELAY };
+  SortState m_sort_state = SortState::INTAKING;
+  double m_sort_trigger_time = 0.0;     // when the triggering ball was seen
+                                        // (wrong -> extend, correct -> retract)
+  double m_sort_delay = 0.15;           // s for a ball to travel sensor -> sorter
+  int m_sorter_io_port = 0;             // digital-out bit the sorter solenoid is on
+  bool m_auto_sort_enabled = false;     // driver toggle (off = manual intake)
+  bool m_auto_sort_btn_pressed = false; // edge-detect for the toggle button
+
   rclcpp::Subscription<std_msgs::msg::Int64>::SharedPtr m_button_color_target_sub;
   rclcpp::Subscription<std_msgs::msg::Int64>::SharedPtr m_button_mirrored_sub;
   rclcpp::Subscription<std_msgs::msg::Int64>::SharedPtr m_button_reset_sub;
@@ -182,11 +269,20 @@ protected:
   // Tank Model
   std::shared_ptr<TankModel> m_tank_model_ptr;
   std::shared_ptr<motion_planning::Trajectory> tank_trajectory_ptr_;
+  // Raw planner output shared with the nav2 controller branch (no conversion).
+  std::shared_ptr<nav_msgs::msg::Path> planned_path_ptr_;
   std::shared_ptr<ghost_control::PIDController> m_distance_approach_controller_ptr;
   std::shared_ptr<ghost_control::PIDController> m_steering_approach_controller_ptr;
   std::shared_ptr<ghost_control::PIDController> m_distance_settling_controller_ptr;
   std::shared_ptr<ghost_control::PIDController> m_steering_settling_controller_ptr;
   std::shared_ptr<ghost_control::PIDController> m_arc_turn_controller_ptr;
+
+  // Arm (3-stage PID position control on arm_motor, toggled with L2)
+  std::shared_ptr<ghost_control::PIDController> m_arm_controller_ptr;
+  std::vector<double> m_arm_stage_positions_deg{0.0, 0.0, 0.0};
+  size_t m_arm_stage{0};
+  std::shared_ptr<ghost_control::PIDController> m_lift_controller_ptr;
+  std::vector<double> m_lift_stage_positions_deg{0.0, 0.0, 0.0, 0.0, 0.0};
 
   // Autonomy
   std::string bt_path_;
@@ -229,7 +325,10 @@ protected:
 
   bool m_use_backup_estimator = false;
   bool m_reset_world_pose = false;
-  bool m_clamp_closed{false};
+  bool m_descore_up{false};
+  bool m_score_pos_up{false};
+  bool m_match_loading_up{false};
+  bool m_color_switcher{false};
   bool m_bite_closed{false};
   bool m_goal_rush_active{false};
   bool m_goal_rush_clamp_active{false};

@@ -33,6 +33,7 @@
 #include "ghost_v5_interfaces/devices/motor_device_interface.hpp"
 #include "ghost_v5_interfaces/devices/digital_io_device_interface.hpp"
 #include "ghost_v5_interfaces/devices/rotation_sensor_device_interface.hpp"
+#include "ghost_v5_interfaces/inter_robot/other_robot_packet.hpp"
 
 
 #if GHOST_DEVICE == GHOST_JETSON
@@ -127,6 +128,26 @@ public:
   void setConnectedStatus(bool is_connected)
   {
     is_connected_ = is_connected;
+  }
+
+  /**
+   * @brief Returns whether this robot's inter-robot VEXlink radio is currently connected to the peer.
+   */
+  bool isInterRobotLinkConnected() const
+  {
+    return inter_robot_link_connected_;
+  }
+
+  /**
+   * @brief Set inter-robot VEXlink connection status from the V5 Brain.
+   * This is only used to report current status from the V5 Brain to the coprocessor,
+   * it won't change anything on the V5 Brain.
+   *
+   * @param link_connected
+   */
+  void setInterRobotLinkConnected(bool link_connected)
+  {
+    inter_robot_link_connected_ = link_connected;
   }
 
   //////////////////////////////////////////////////////////////
@@ -346,6 +367,51 @@ public:
     return device_pair_name_map_.at(device_name).data_ptr->clone()->as<T>();
   }
 
+  //////////////////////////////////////////////////////////////
+  /////////////////////// Inter-Robot Comms /////////////////////
+  //////////////////////////////////////////////////////////////
+  // Fixed-size opaque payload exchanged with the peer robot over VEXlink. The V5 brain relays these
+  // bytes between this slot and the radio without interpreting them; the field layout lives in
+  // ghost_msgs/msg/OtherRobot.msg (see msg_helpers::packOtherRobot). "tx" is the payload this robot
+  // wants to send to the peer (rides the actuator-command stream, coprocessor -> V5); "rx" is the
+  // payload most recently received from the peer (rides the sensor-update stream, V5 -> coprocessor).
+
+  /**
+   * @brief Returns the outbound inter-robot payload (to be transmitted to the peer over VEXlink).
+   */
+  inter_robot::OtherRobotBytes getInterRobotTx() const
+  {
+    std::unique_lock<CROSSPLATFORM_MUTEX_T> update_lock(update_mutex_);
+    return inter_robot_tx_;
+  }
+
+  /**
+   * @brief Sets the outbound inter-robot payload (to be transmitted to the peer over VEXlink).
+   */
+  void setInterRobotTx(const inter_robot::OtherRobotBytes & bytes)
+  {
+    std::unique_lock<CROSSPLATFORM_MUTEX_T> update_lock(update_mutex_);
+    inter_robot_tx_ = bytes;
+  }
+
+  /**
+   * @brief Returns the inbound inter-robot payload (most recently received from the peer over VEXlink).
+   */
+  inter_robot::OtherRobotBytes getInterRobotRx() const
+  {
+    std::unique_lock<CROSSPLATFORM_MUTEX_T> update_lock(update_mutex_);
+    return inter_robot_rx_;
+  }
+
+  /**
+   * @brief Sets the inbound inter-robot payload (most recently received from the peer over VEXlink).
+   */
+  void setInterRobotRx(const inter_robot::OtherRobotBytes & bytes)
+  {
+    std::unique_lock<CROSSPLATFORM_MUTEX_T> update_lock(update_mutex_);
+    inter_robot_rx_ = bytes;
+  }
+
   /////////////////////////////////////////////////////////////
   /////////////////////// Serialization ///////////////////////
   /////////////////////////////////////////////////////////////
@@ -420,6 +486,12 @@ private:
   bool is_disabled_ = true;
   bool is_autonomous_ = false;
   bool is_connected_ = false;
+
+  // Inter-Robot Comms (opaque payload relayed to/from the peer robot over VEXlink)
+  inter_robot::OtherRobotBytes inter_robot_tx_{};
+  inter_robot::OtherRobotBytes inter_robot_rx_{};
+  // VEXlink radio connection status, reported V5 Brain -> coprocessor alongside competition state.
+  bool inter_robot_link_connected_ = false;
 
   // Serialization
   int msg_id_ = 0;

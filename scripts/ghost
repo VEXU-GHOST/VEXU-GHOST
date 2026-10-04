@@ -1,30 +1,125 @@
-#!/usr/bin/env bash
-# Print the connection address; ROS launch starts the bridge separately.
-set -euo pipefail
+#!/bin/sh
 
-usage() {
-    printf '%s\n' 'Usage: ghost foxglove-url [host]' 'Default host: orinx.local; use localhost for local simulation.'
-}
+# Use this script as 'ghost' it should be installed onto your system.
 
-case "${1:-}" in
-    foxglove-url)
-        if (( $# > 2 )); then
-            usage >&2
+set -x
+
+# Resolve through symlinks (e.g. /usr/local/bin/ghost) so paths point at the repo.
+DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+
+# A machine is a robot once its name is written to /etc/ghost/robot_name (see the
+# set-robot-name command). If that's unset this isn't a robot, so only run, kill,
+# build, clean, pros-clean, foxglove-url, and set-robot-name are available.
+if [ ! -s /etc/ghost/robot_name ]; then
+    case "$1" in
+        run|kill|build|clean|pros-clean|foxglove-url|set-robot-name) ;;
+        *)
+            echo "ghost $1: no robot name set (/etc/ghost/robot_name); only run/kill/build/clean/pros-clean/foxglove-url/set-robot-name are available off-robot"
+            exit 1
+            ;;
+    esac
+fi
+
+case "$1" in
+    "start")
+        echo "Starting ghost services"
+        systemctl --user start --all 'ghost*.service'
+        ;;
+    "restart")
+        echo "Restarting ghost services"
+        systemctl --user kill 'ghost*service'
+        systemctl --user start --all 'ghost*.service'
+        ;;
+    "stop")
+        echo "Stopping ghost services"
+        systemctl --user stop 'ghost*service'
+        pkill -f -e /ros
+        pkill -f -e ros2
+        pkill -f -e gz
+        ;;
+    "kill")
+        echo "Killing ghost services"
+        systemctl --user kill 'ghost*service'
+        pkill -f -9 -e ros
+        pkill -f -9 -e ros2
+        pkill -f -9 -e gz
+        ;;
+    "shutdown")
+        echo "Shutting down ghost services"
+        sudo -v
+        systemctl --user stop 'ghost*service'
+        pkill -f -e ros2
+        echo "shutting down in 3 seconds!!!!"
+        sleep 6
+        sudo poweroff
+        ;;
+    "run")
+        # 'ghost run --v5' first runs the V5 brain program via PROS, then
+        # continues on to launch the hardware stack in this terminal.
+        if [ "$2" = "--v5" ]; then
+            echo "Running V5 program via PROS"
+            pros v5 run
+        fi
+        echo "Running ghost hardware in this terminal"
+        # Stop anything already running, then launch hardware in this terminal.
+        "$0" stop
+        exec "$DIR/hardware/launch_hardware.sh"
+        ;;
+    "build")
+        echo "Building ghost"
+        # Pass any remaining args (package names) through to the build script.
+        shift
+        exec "$DIR/build/build.sh" "$@"
+        ;;
+    "clean")
+        echo "Cleaning ghost build artifacts"
+        # Pass any remaining args (package names) through to the clean script.
+        shift
+        exec "$DIR/build/clean.sh" "$@"
+        ;;
+    "pros-clean")
+        echo "Cleaning PROS project"
+        exec "$DIR/build/pros_clean.sh"
+        ;;
+    "install")
+        echo "Installing ghost services"
+        systemctl --user link $DIR/hardware/*service
+        systemctl --user enable --now $DIR/hardware/*service
+        ;;
+    "configure-os")
+        echo "Configuring OS for ghost"
+        "$DIR/hardware/configure-os.sh"
+        ;;
+    "set-robot-name")
+        if [ -z "$2" ]; then
+            echo "Usage: ghost set-robot-name <name>"
+            exit 1
+        fi
+        echo "Setting robot name to '$2'"
+        sudo mkdir -p /etc/ghost
+        echo "$2" | sudo tee /etc/ghost/robot_name > /dev/null
+        ;;
+    "foxglove-url")
+        # Print the Foxglove connection address; ROS launch starts the bridge separately.
+        # Default host is orinx.local; use localhost for local simulation.
+        if [ $# -gt 2 ]; then
+            echo "Usage: ghost foxglove-url [host]" >&2
             exit 2
         fi
         host="${2:-orinx.local}"
-        if [[ ! "$host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]; then
-            printf '%s\n' 'Host must be a hostname or IPv4 address, without ws:// or a port.' >&2
-            exit 2
-        fi
+        case "$host" in
+            ""|[!a-zA-Z0-9]*|*[!a-zA-Z0-9.-]*)
+                echo "Host must be a hostname or IPv4 address, without ws:// or a port." >&2
+                exit 2
+                ;;
+        esac
         printf 'ws://%s:8765\n' "$host"
         ;;
-    help|--help|-h|"")
-        usage
+    "log")
+        echo "Showing ghost hardware logs"
+        exec journalctl -xe --user-unit ghost-hardware
         ;;
     *)
-        printf 'Unknown command: %s\n' "$1" >&2
-        usage >&2
-        exit 2
+        echo "Usage: ghost [run [--v5]/build [pkg...]/clean [pkg...]/pros-clean/start/restart/stop/kill/shutdown/install/configure-os/set-robot-name <name>/foxglove-url [host]/log]"
         ;;
 esac

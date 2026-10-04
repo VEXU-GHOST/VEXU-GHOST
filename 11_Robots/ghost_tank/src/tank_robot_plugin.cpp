@@ -59,24 +59,24 @@ TankRobotPlugin::TankRobotPlugin()
 void TankRobotPlugin::populateMotorNames()
 {
   m_right_drive_motor_names = {
-    // "drive_r1",
+    "drive_r1",
     "drive_r2",
     "drive_r3",
     "drive_r4",
     "drive_r5",
     "drive_r6",
     "drive_r7",
-    "drive_r8",
+    // "drive_r8",
   };
   m_left_drive_motor_names = {
     "drive_l1",
     "drive_l2",
     "drive_l3",
     "drive_l4",
-    // "drive_l5",
-    "drive_l6",
+    "drive_l5",
+    // "drive_l6",
     "drive_l7",
-    "drive_l8",
+    // "drive_l8",
   };
 
   m_all_drive_motor_names.insert(
@@ -92,11 +92,12 @@ void TankRobotPlugin::populateMotorNames()
 
 void TankRobotPlugin::populateDigitalIONames()
 {
-  digital_io_port_map["goal_rush_l"] = 0;
-  digital_io_port_map["climb"] = 1;
-  digital_io_port_map["goal_rush_r"] = 2;
-  digital_io_port_map["bite"] = 3;
-  digital_io_port_map["clamp"] = 4;
+  digital_io_port_map["score_pos"] = 2;
+  digital_io_port_map["color_sorter"] = 0;
+  digital_io_port_map["descorer"] = 1;
+  digital_io_port_map["match_loading"] = 7;
+  // TODO: what port is it actually
+
 }
 
 //////////////////////
@@ -109,6 +110,8 @@ void TankRobotPlugin::initialize()
   initROSComms();
   initEstimation();
   initIntake();
+  initArm();
+  initLift();
   initTankModel();
   initAutonomy();
   resetWorldPose();
@@ -141,7 +144,21 @@ void TankRobotPlugin::initROSComms()
 
   node_ptr_->declare_parameter("odom_topic", "/sensors/wheel_odom");
   std::string odom_topic = node_ptr_->get_parameter("odom_topic").as_string();
-  m_odom_pub = node_ptr_->create_publisher<nav_msgs::msg::Odometry>(odom_topic, rclcpp::SensorDataQoS());
+  m_odom_pub = node_ptr_->create_publisher<nav_msgs::msg::Odometry>(
+    odom_topic, rclcpp::SensorDataQoS());
+
+  // Wheel-odom watchdog: odom_ekf only initializes once it receives a wheel-odom
+  // message, and the V5 brain stops sending them when it's off. A 1 Hz timer
+  // republishes the last odom whenever nothing has gone out in the last second,
+  // so the EKF still gets a measurement (identity until the first real one) and
+  // the odom->base_link tree comes up. The normal sensor path resets the timer.
+  m_last_odom_msg.header.frame_id = "odom";
+  m_last_odom_msg.child_frame_id = "base_link";
+  m_last_odom_msg.pose.pose.orientation.w = 1.0;
+  m_last_sensor_time = std::chrono::steady_clock::now();
+  m_odom_watchdog_timer = node_ptr_->create_wall_timer(
+    std::chrono::seconds(1),
+    std::bind(&TankRobotPlugin::odomWatchdogLoop, this));
 
   // Subscriptions
   node_ptr_->declare_parameter("pose_topic", "/odometry/filtered");
@@ -153,6 +170,13 @@ void TankRobotPlugin::initROSComms()
   m_robot_backup_pose_sub = node_ptr_->create_subscription<nav_msgs::msg::Odometry>(backup_pose_topic, rclcpp::SensorDataQoS(), std::bind(&TankRobotPlugin::worldOdometryUpdateCallbackBackup, this, _1));
 
   m_robot_color = node_ptr_->create_subscription<std_msgs::msg::String>("/sensors/color_sensors/intake/color", rclcpp::SensorDataQoS(), std::bind(&TankRobotPlugin::colorCallback, this, _1));
+
+  // Auto-sort colour source: a ball_color_classifier publishing BallColor. The
+  // sensor name differs per robot (clyde: sorter_hood, blinky: intake), so the
+  // topic is a parameter set in each robot's config.
+  node_ptr_->declare_parameter("tank_robot_plugin.sort_color_topic", "/sensors/color/intake/class");
+  std::string sort_color_topic = node_ptr_->get_parameter("tank_robot_plugin.sort_color_topic").as_string();
+  m_sort_color_sub = node_ptr_->create_subscription<ghost_msgs::msg::BallColor>(sort_color_topic, rclcpp::SensorDataQoS(), std::bind(&TankRobotPlugin::sortColorCallback, this, _1));
 
   // Tank-Specific Publishers
   node_ptr_->declare_parameter("tank_robot_plugin.cmd_pose_topic", "/set_pose");
@@ -254,18 +278,8 @@ void TankRobotPlugin::initIntake()
 {
   std::cout << "[TankRobotPlugin::initIntake]" << std::endl;
   node_ptr_->declare_parameter("tank_robot_plugin.conveyor_num_links", 0.0);
-  node_ptr_->declare_parameter("tank_robot_plugin.conveyor_sprocket_teeth", 0.0);
-  node_ptr_->declare_parameter("tank_robot_plugin.conveyor_num_hooks", 0.0);
-  double conveyor_num_links = node_ptr_->get_parameter("tank_robot_plugin.conveyor_num_links").as_double();
-  double conveyor_sprocket_teeth = node_ptr_->get_parameter("tank_robot_plugin.conveyor_sprocket_teeth").as_double();
-  double conveyor_num_hooks = node_ptr_->get_parameter("tank_robot_plugin.conveyor_num_hooks").as_double();
-  m_conveyor_ticks_per_loop = 360.0 * conveyor_num_links / conveyor_sprocket_teeth;
-  m_conveyor_ticks_per_hook = m_conveyor_ticks_per_loop / conveyor_num_hooks;
 
-  node_ptr_->declare_parameter("tank_robot_plugin.conveyor_hook_align_threshold", 0.0);
-  node_ptr_->declare_parameter("tank_robot_plugin.conveyor_hook_align_power", 0.0);
-  m_conveyor_hook_align_threshold = node_ptr_->get_parameter("tank_robot_plugin.conveyor_hook_align_threshold").as_double();
-  m_conveyor_hook_align_power = node_ptr_->get_parameter("tank_robot_plugin.conveyor_hook_align_power").as_double();
+  double conveyor_num_links = node_ptr_->get_parameter("tank_robot_plugin.conveyor_num_links").as_double();
 
   node_ptr_->declare_parameter("tank_robot_plugin.conveyor_hook_throw_fraction", 0.0);
   node_ptr_->declare_parameter("tank_robot_plugin.conveyor_hook_throw_duration", 0.0);
@@ -278,6 +292,22 @@ void TankRobotPlugin::initIntake()
     {"blue", 2},
     {"unknown", 0}
   };
+
+  // Auto-sort timing (see autoSort()).
+  node_ptr_->declare_parameter("tank_robot_plugin.sort_delay", m_sort_delay);
+  node_ptr_->declare_parameter("tank_robot_plugin.sorter_io_port", m_sorter_io_port);
+  m_sort_delay = node_ptr_->get_parameter("tank_robot_plugin.sort_delay").as_double();
+  m_sorter_io_port = node_ptr_->get_parameter("tank_robot_plugin.sorter_io_port").as_int();
+
+  // Initial team colour for auto-sort: keep our colour, eject the other. true ->
+  // red. The color_target button still overrides this at runtime (see
+  // colorTargetButtonCallback).
+  node_ptr_->declare_parameter("tank_robot_plugin.is_red_alliance", m_color_target_red);
+  m_color_target_red = node_ptr_->get_parameter("tank_robot_plugin.is_red_alliance").as_bool();
+  // Reflect the configured team colour on the indicator LED right away.
+  auto color_led_msg = std_msgs::msg::Int64();
+  color_led_msg.data = m_color_target_red;
+  m_led_color_red_pub->publish(color_led_msg);
 
   m_ring_found = false;
   m_ring_color = m_color_map["unknown"];
@@ -302,6 +332,34 @@ PIDConfig TankRobotPlugin::loadPIDConfig(const std::string & param_prefix)
   return config;
 }
 
+void TankRobotPlugin::initArm()
+{
+  std::cout << "[TankRobotPlugin::initArm]" << std::endl;
+
+  auto arm_pid_config = loadPIDConfig("arm");
+  m_arm_controller_ptr = std::make_shared<PIDController>(arm_pid_config);
+
+  // 3 preset arm stage positions (motor encoder degrees), cycled by L2 in
+  // updateArm(). Left at 0.0 for now -- tune via config yaml.
+  node_ptr_->declare_parameter(
+    "tank_robot_plugin.arm_stage_positions_deg", std::vector<double>{0.0, 0.0, 0.0});
+  m_arm_stage_positions_deg = node_ptr_->get_parameter(
+    "tank_robot_plugin.arm_stage_positions_deg").as_double_array();
+}
+
+void TankRobotPlugin::initLift()
+{
+  std::cout << "[TankRobotPlugin::initLift]" << std::endl;
+
+  auto lift_pid_config = loadPIDConfig("lift");
+  m_lift_controller_ptr = std::make_shared<PIDController>(lift_pid_config);
+  node_ptr_->declare_parameter(
+    "tank_robot_plugin.lift_stage_positions_deg",
+    std::vector<double>{0.0, 0.0, 0.0, 0.0, 0.0});
+  m_lift_stage_positions_deg = node_ptr_->get_parameter(
+    "tank_robot_plugin.lift_stage_positions_deg").as_double_array();
+}
+
 void TankRobotPlugin::initTankModel()
 {
   std::cout << "[TankRobotPlugin::initTankModel]" << std::endl;
@@ -324,6 +382,7 @@ void TankRobotPlugin::initTankModel()
 
   m_tank_model_ptr = std::make_shared<TankModel>(node_ptr_, rhi_ptr_, tank_model_config);
   tank_trajectory_ptr_ = std::make_shared<motion_planning::Trajectory>();
+  planned_path_ptr_ = std::make_shared<nav_msgs::msg::Path>();
   m_odom_ptr = std::make_shared<TankOdometry>(motor_ticks_per_rotation * drive_gear_ratio, wheel_rad_in * INCHES_TO_METERS, wheel_base_inches * INCHES_TO_METERS);
   m_odom_ptr->resetPose();
 
@@ -365,7 +424,7 @@ void TankRobotPlugin::initAutonomy()
 
   node_ptr_->declare_parameter<double>("tank_robot_plugin.ring_score_timeout");
   m_ring_score_timeout = node_ptr_->get_parameter("tank_robot_plugin.ring_score_timeout").as_double();
-  
+
   node_ptr_->declare_parameter<double>("tank_robot_plugin.ring_prewait_time");
   m_ring_prewait_time = node_ptr_->get_parameter("tank_robot_plugin.ring_prewait_time").as_double();
 
@@ -374,6 +433,7 @@ void TankRobotPlugin::initAutonomy()
   bt_->set_variable("tank_model_ptr", m_tank_model_ptr);
   bt_->set_variable("node_ptr", node_ptr_);
   bt_->set_variable("tank_trajectory_ptr", tank_trajectory_ptr_);
+  bt_->set_variable("planned_path_ptr", planned_path_ptr_);
   bt_->set_variable("distance_approach_controller_ptr", m_distance_approach_controller_ptr);
   bt_->set_variable("distance_settling_controller_ptr", m_steering_approach_controller_ptr);
   bt_->set_variable("steering_approach_controller_ptr", m_distance_settling_controller_ptr);
@@ -399,19 +459,11 @@ void TankRobotPlugin::onNewSensorData()
 
   // Clear current limits at start of loop
   m_loop_current_limits.clear();
-
-  updateConveyorPositionSensing();
+// 
+  // updateConveyorPositionSensing();
   publishIMUData();
   updateAndPublishOdometry();
   // publishTrajectoryVisualization();
-}
-
-void TankRobotPlugin::updateConveyorPositionSensing()
-{
-  m_conveyor_position_abs = rhi_ptr_->getMotorPosition("conveyor_motor_bottom");
-  m_conveyor_position_rel = std::fmod(m_conveyor_position_abs, m_conveyor_ticks_per_loop);
-  m_conveyor_position_rel += (m_conveyor_position_rel < 0.0) ? m_conveyor_ticks_per_loop : 0.0;
-  m_hook_fraction = std::fmod(m_conveyor_position_rel, m_conveyor_ticks_per_hook) / m_conveyor_ticks_per_hook;
 }
 
 
@@ -443,6 +495,9 @@ void TankRobotPlugin::publishIMUData()
 
 void TankRobotPlugin::disabled()
 {
+  if (rhi_ptr_) {
+    // rhi_ptr_->setMotorVoltageCommandPercent("switcher_motor", 0.0);
+  }
 }
 
 void TankRobotPlugin::autonomous(double current_time)
@@ -452,12 +507,12 @@ void TankRobotPlugin::autonomous(double current_time)
     playTTS("starting autonomous");
     // m_odom_ptr->resetPose();
     // resetWorldPose();
-    if (m_interaction){
+    if (m_interaction) {
       bt_->set_path(m_bt_path_interaction);
       resetBT();
       m_tank_model_ptr->driveCommandTank(0.0, 0.0);
     }
-    
+
     bt_->set_variable<bool>("clamp_closed", false);
     bt_->set_variable<bool>("bite_closed", false);
     bt_->set_variable<bool>("goal_rush_down", false);
@@ -466,8 +521,18 @@ void TankRobotPlugin::autonomous(double current_time)
     bt_->set_variable<bool>("conveyor_active", false);
     bt_->set_variable<bool>("store_ring", false);
     bt_->set_variable<bool>("ring_detector_active", false);
+    bt_->set_variable<bool>("score_pos_up", false);
+    bt_->set_variable<bool>("match_loading_up", false);
+    bt_->set_variable<bool>("descorer_up", false);
+    bt_->set_variable<int>("switcher_direction", 0);
+    bt_->set_variable<int>("outtake_direction", 0);
+    bt_->set_variable<int>("score_ball_direction", 0);
+    bt_->set_variable<int>("arm_target_stage", -1);
+    bt_->set_variable<int>("lift_target_stage", -1);
+    bt_->set_variable<bool>("auto_sort_active", false);
+    m_sort_state = SortState::INTAKING;
   }
-  
+
   bt_->set_variable("auton_time_elapsed", current_time);
   // bt_->set_variable<bool>("mirrored", m_mirrored);
 
@@ -481,34 +546,138 @@ void TankRobotPlugin::autonomous(double current_time)
   // auto curr_pose = m_tank_model_ptr->getWorldPose();
   auto curr_twist = m_tank_model_ptr->getWorldTwist();
 
-  bool ring_detector_active = false;
-  bool want_red = m_color_target_red;
-  bool store_ring = false;
-  bool conveyor_active = false;
-  bool ground_intake_active = false;
-  bt_->get_variable<bool>("ring_detector_active", ring_detector_active);
-  bt_->get_variable<bool>("store_ring", store_ring);
-  bt_->get_variable<bool>("conveyor_active", conveyor_active);
-  bt_->get_variable<bool>("ground_intake_active", ground_intake_active);
-
-  if (conveyor_active) {
-    updateConveyorOnly(true);
-  } else if (ring_detector_active) {
-    ringDetector(ring_detector_active, current_time, want_red, store_ring);
+  // Apply intake/outtake command set by OuttakeBallsCmd BT node.
+  // direction: -1 = outtake, 0 = stop, 1 = intake
+  int outtake_direction = 0;
+  bt_->get_variable<int>("outtake_direction", outtake_direction);
+  if (outtake_direction != 0) {
+    rhi_ptr_->setMotorVoltageCommandPercent("intake_motor",
+      static_cast<double>(outtake_direction));
+    rhi_ptr_->setMotorCurrentLimitMilliAmps("intake_motor", 2500);
   } else {
-    updateIntake(ground_intake_active, false, false, false, current_time);
+    rhi_ptr_->setMotorVoltageCommandPercent("intake_motor", 0.0);
+    rhi_ptr_->setMotorCurrentLimitMilliAmps("intake_motor", 2500);
+    rhi_ptr_->setMotorVoltageCommandPercent("ejector_motor", 0.0);
+    rhi_ptr_->setMotorCurrentLimitMilliAmps("ejector_motor", 2500);
   }
 
-  // Update Pneumatics
-  rhi_ptr_->setDigitalOut(digital_io_port_map["clamp"], bt_->get_variable<int>("clamp_closed"));
-  if (m_mirrored) {
-    rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_l"], bt_->get_variable<int>("goal_rush_r_down") || bt_->get_variable<int>("goal_rush_down"));
-    rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_r"], bt_->get_variable<int>("goal_rush_l_down"));
+  // Apply scorer command set by ScoreBallCmd BT node.
+  // direction: -1 = reverse, 0 = stop, 1 = score (scorer/top motor forward).
+  // Drives the ejector too, mirroring teleop scoring (updateIntake), so the ball
+  // travels all the way up the scoring path.
+  int score_ball_direction = 0;
+  bt_->get_variable<int>("score_ball_direction", score_ball_direction);
+  if (score_ball_direction != 0) {
+    double scorer_pct = static_cast<double>(score_ball_direction);
+    rhi_ptr_->setMotorVoltageCommandPercent("scorer_motor", scorer_pct);
+    rhi_ptr_->setMotorCurrentLimitMilliAmps("scorer_motor", 2500);
+    rhi_ptr_->setMotorVoltageCommandPercent("ejector_motor", scorer_pct);
+    rhi_ptr_->setMotorCurrentLimitMilliAmps("ejector_motor", 2500);
   } else {
-    rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_l"], bt_->get_variable<int>("goal_rush_l_down"));
-    rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_r"], bt_->get_variable<int>("goal_rush_r_down") || bt_->get_variable<int>("goal_rush_down"));
+    rhi_ptr_->setMotorVoltageCommandPercent("scorer_motor", 0.0);
+    rhi_ptr_->setMotorCurrentLimitMilliAmps("scorer_motor", 2500);
   }
-  rhi_ptr_->setDigitalOut(digital_io_port_map["bite"], bt_->get_variable<int>("bite_closed"));
+
+  // Apply arm/lift stage commands set by ArmPosCmd/LiftPosCmd BT nodes.
+  // -1 = no command (leave whatever was last commanded / teleop's control).
+  static int last_bt_arm_stage = -1;
+  int arm_target_stage = -1;
+  bt_->get_variable<int>("arm_target_stage", arm_target_stage);
+  if (arm_target_stage >= 0) {
+    if (arm_target_stage != last_bt_arm_stage) {
+      m_arm_controller_ptr->reset();
+    }
+    updateArmToStage(static_cast<size_t>(arm_target_stage));
+  }
+  last_bt_arm_stage = arm_target_stage;
+
+  static int last_bt_lift_stage = -1;
+  int lift_target_stage = -1;
+  bt_->get_variable<int>("lift_target_stage", lift_target_stage);
+  if (lift_target_stage >= 0) {
+    if (lift_target_stage != last_bt_lift_stage) {
+      m_lift_controller_ptr->reset();
+    }
+    updateLiftToStage(static_cast<size_t>(lift_target_stage));
+  }
+  last_bt_lift_stage = lift_target_stage;
+
+  // Auto-sort (AutoSortCmd BT node). While active, take over the intake + sorter:
+  // constantly intake and fire the sorter on a wrong-colour ball. Runs after the
+  // outtake block so its intake command wins; sets "sorter_active" for the robot
+  // plugin's pneumatics pass.
+  bool auto_sort_active = false;
+  bt_->get_variable<bool>("auto_sort_active", auto_sort_active);
+  if (auto_sort_active) {
+    autoSort(current_time);
+  }
+
+  // bool ring_detector_active = false;
+  // bool want_red = m_color_target_red;
+  // bool store_ring = false;
+  // bool conveyor_active = false;
+  // bool ground_intake_active = false;
+  // bool score_pos_up = false;
+  // int outtake_direction = 0;
+  // int score_ball_direction = 0;
+  // bt_->get_variable<bool>("ring_detector_active", ring_detector_active);
+  // bt_->get_variable<bool>("store_ring", store_ring);
+  // bt_->get_variable<bool>("conveyor_active", conveyor_active);
+  // bt_->get_variable<bool>("ground_intake_active", ground_intake_active);
+  // bt_->get_variable<bool>("score_pos_up", score_pos_up);
+  // bt_->get_variable<int>("outtake_direction", outtake_direction);
+  // bt_->get_variable<int>("score_ball_direction", score_ball_direction);
+
+  // if (score_pos_up) {
+  //   rhi_ptr_->setMotorVoltageCommandPercent("intake_motor", 1.0);
+  //   rhi_ptr_->setMotorVoltageCommandPercent("scorer_motor", 1.0);
+  //   rhi_ptr_->setMotorCurrentLimitMilliAmps("intake_motor", 2500);
+  //   rhi_ptr_->setMotorCurrentLimitMilliAmps("scorer_motor", 2500);
+  // } else if (score_ball_direction != 0) {
+  //   // ScoreBall uses scorer_motor only (top); intake stays off
+  //   double motor_pct = static_cast<double>(score_ball_direction);
+  //   rhi_ptr_->setMotorVoltageCommandPercent("intake_motor", 0.0);
+  //   rhi_ptr_->setMotorVoltageCommandPercent("scorer_motor", motor_pct);
+  //   rhi_ptr_->setMotorCurrentLimitMilliAmps("intake_motor", 2500);
+  //   rhi_ptr_->setMotorCurrentLimitMilliAmps("scorer_motor", 2500);
+  // } else if (outtake_direction != 0) {
+  //   double intake_pct = static_cast<double>(outtake_direction);
+  //   rhi_ptr_->setMotorVoltageCommandPercent("intake_motor", intake_pct);
+  //   rhi_ptr_->setMotorVoltageCommandPercent("scorer_motor", 0.0);
+  //   rhi_ptr_->setMotorCurrentLimitMilliAmps("intake_motor", 2500);
+  //   rhi_ptr_->setMotorCurrentLimitMilliAmps("scorer_motor", 2500);
+  // } else if (conveyor_active) {
+  //   updateConveyorOnly(true);
+  // } else if (ring_detector_active) {
+  //   ringDetector(ring_detector_active, current_time, want_red, store_ring);
+  // } else {
+  //   updateIntake(ground_intake_active, false, false, false);
+  // }
+
+  // // Update Pneumatics
+  // rhi_ptr_->setDigitalOut(digital_io_port_map["clamp"], bt_->get_variable<int>("clamp_closed"));
+  // if (m_mirrored) {
+  //   rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_l"], bt_->get_variable<int>("goal_rush_r_down") || bt_->get_variable<int>("goal_rush_down"));
+  //   rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_r"], bt_->get_variable<int>("goal_rush_l_down"));
+  // } else {
+  //   rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_l"], bt_->get_variable<int>("goal_rush_l_down"));
+  //   rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_r"], bt_->get_variable<int>("goal_rush_r_down") || bt_->get_variable<int>("goal_rush_down"));
+  // }
+  // rhi_ptr_->setDigitalOut(digital_io_port_map["bite"], bt_->get_variable<int>("bite_closed"));
+  // rhi_ptr_->setDigitalOut(digital_io_port_map["score_pos"], bt_->get_variable<int>("score_pos_up"));
+  // rhi_ptr_->setDigitalOut(digital_io_port_map["match_loading"], bt_->get_variable<int>("match_loading_up"));
+  // rhi_ptr_->setDigitalOut(digital_io_port_map["descorer"], bt_->get_variable<int>("descorer_up"));
+  // // Switcher motor control (auton): direction -1=down, 0=stop, 1=up
+  // // int switcher_direction = 0;
+  // // bt_->get_variable<int>("switcher_direction", switcher_direction);
+  // // if (switcher_direction != 0) {
+  // //   double motor_pct = static_cast<double>(switcher_direction);
+  // //   rhi_ptr_->setMotorCurrentLimitMilliAmps("switcher_motor", 2500);
+  // //   rhi_ptr_->setMotorVoltageCommandPercent("switcher_motor", motor_pct);
+  // // } else {
+  // //   rhi_ptr_->setMotorCurrentLimitMilliAmps("switcher_motor", 2500);
+  // //   rhi_ptr_->setMotorVoltageCommandPercent("switcher_motor", 0.0);
+  // // }
 
   // Publish Twist Command
   geometry_msgs::msg::Twist msg{};
@@ -530,7 +699,9 @@ void TankRobotPlugin::resetBT()
     std::cout << "Initializing Behavior Tree" << std::endl;
     bt_->init_tree();
   } catch (std::exception & e) {
-    std::cout << "Error init_tree: " << e.what() << std::endl;
+    std::cerr << "\033[1;31m==============================================================================\033[0m" << std::endl;
+    std::cerr << "\033[1;31mError init_tree: " << e.what() << "\033[0m" << std::endl;
+    std::cerr << "\033[1;31m==============================================================================\033[0m" << std::endl;
   }
   std::cout << "ResetBT Complete!" << std::endl;
 }
@@ -538,8 +709,8 @@ void TankRobotPlugin::resetBT()
 void TankRobotPlugin::teleop(double current_time)
 {
   auto joy_data = rhi_ptr_->getMainJoystickData();
-  bool shift1 = joy_data->btn_b;
-  bool shift2 = joy_data->btn_d;
+
+  bool r2_held = joy_data->btn_r2;
 
   // Shutdown Request
   if (joy_data->btn_a && joy_data->btn_b && joy_data->btn_x && joy_data->btn_y &&
@@ -559,15 +730,30 @@ void TankRobotPlugin::teleop(double current_time)
   updateMusic(current_time, joy_data); //MUST RUN FIRST: pressing u takes over all right buttons
   toggleBagRecorder(joy_data);
 
-  updateClamp(joy_data->btn_l2, joy_data->btn_r2, shift2);
-  updateGoalRush(joy_data->btn_l1, joy_data->btn_r1, shift2);
-  updateIntakeFromJoystick(joy_data, shift2, shift1, current_time);
+  updateDescore(joy_data->btn_d);
+
+  // Auto-sort toggle (d-pad right, edge-triggered). While enabled, autoSort()
+  // takes over the intake + sorter; otherwise the driver controls the intake.
+  if (joy_data->btn_r && !m_auto_sort_btn_pressed) {
+    m_auto_sort_enabled = !m_auto_sort_enabled;
+    if (!m_auto_sort_enabled) {
+      // Leave the sorter retracted when switching back to manual control.
+      m_sort_state = SortState::INTAKING;
+      rhi_ptr_->setDigitalOut(m_sorter_io_port, false);
+    }
+  }
+  m_auto_sort_btn_pressed = joy_data->btn_r;
+
+  updateLiftFromJoystick(joy_data);
+  updateArmFromJoystick(joy_data);
   updateDrivetrain(joy_data);
+
+  updateColorSwitcher(joy_data->btn_u);
 }
 
 void TankRobotPlugin::ringDetector(bool active, double current_time, bool want_red, bool store_ring)
 {
-  
+
   static double last_input_time = 0.0;
   static double ring_found_time = 0.0;
   static double stuck_detection_time = 0.0;
@@ -575,14 +761,14 @@ void TankRobotPlugin::ringDetector(bool active, double current_time, bool want_r
   static bool retry_mode = false;
   static double retry_start_time = 0.0;
   static int last_color = 0;
-  
+
   static std::queue<int> ring_queue;
   static std::queue<double> ring_time_queue;
-  
+
   static double last_time = 0.0;
   static double time_sum = 0.0;
   // if (!store_ring && ring_queue.size() < 2){
-    time_sum += std::clamp(current_time - last_time, 0.0, 0.05);
+  time_sum += std::clamp(current_time - last_time, 0.0, 0.05);
   // }
   last_time = current_time;
   current_time = time_sum;
@@ -710,7 +896,87 @@ void TankRobotPlugin::ringDetector(bool active, double current_time, bool want_r
   last_color = m_ring_color;
   // std::cout << "queue.back: " << ring_queue.back() << std::endl;
   // Call motor control with determined states
-  updateIntake(ground_intake, hook, ejecting, !hook && retry_mode, current_time);
+  updateIntake(ground_intake, hook, ejecting, !hook && retry_mode);
+}
+
+void TankRobotPlugin::autoSort(double current_time)
+{
+  using BallColor = ghost_msgs::msg::BallColor;
+
+  // Constantly intake: drive the intake forward every tick regardless of state.
+  rhi_ptr_->setMotorVoltageCommandPercent("intake_motor", 0.75);
+  rhi_ptr_->setMotorCurrentLimitMilliAmps("intake_motor", 2500);
+  rhi_ptr_->setMotorVoltageCommandPercent("scorer_motor", 0.75);
+  rhi_ptr_->setMotorCurrentLimitMilliAmps("scorer_motor", 2500);
+  rhi_ptr_->setMotorVoltageCommandPercent("ejector_motor", 1.0);
+  rhi_ptr_->setMotorCurrentLimitMilliAmps("ejector_motor", 2500);
+
+  // Eject the ball that is NOT our team colour. m_color_target_red is set by the
+  // color_target button (true -> we keep red, kick out blue).
+  const uint8_t wrong_color = m_color_target_red ? BallColor::BLUE : BallColor::RED;
+  const uint8_t right_color = m_color_target_red ? BallColor::RED : BallColor::BLUE;
+
+  // Heartbeat: what the sensor reports and what we're waiting for (2 Hz).
+  RCLCPP_INFO_THROTTLE(
+    node_ptr_->get_logger(), *node_ptr_->get_clock(), 500,
+    "[autoSort] detected_color=%d wrong_color=%d state=%d",
+    static_cast<int>(m_sort_color), static_cast<int>(wrong_color),
+    static_cast<int>(m_sort_state));
+
+  bool sorter_active = false;
+
+  switch (m_sort_state) {
+    case SortState::INTAKING:
+      // Retracted: correct balls pass through. Wait for a wrong-colour ball.
+      if (m_sort_color == wrong_color) {
+        m_sort_trigger_time = current_time;
+        m_sort_state = SortState::DELAY;
+        RCLCPP_INFO(node_ptr_->get_logger(),
+          "[autoSort] wrong colour (%d) detected -> DELAY %.2fs",
+          static_cast<int>(m_sort_color), m_sort_delay);
+      }
+      break;
+
+    case SortState::DELAY:
+      // Let the wrong ball travel from the sensor to the sorter, then extend.
+      if (current_time - m_sort_trigger_time >= m_sort_delay) {
+        m_sort_state = SortState::FIRING;
+        sorter_active = true;
+        RCLCPP_INFO(node_ptr_->get_logger(),
+          "[autoSort] EXTENDING sorter (holds until a correct ball)");
+      }
+      break;
+
+    case SortState::FIRING:
+      // Stay extended -- diverting every wrong ball, including several in a row,
+      // with no air wasted toggling -- until a correct-colour ball appears.
+      sorter_active = true;
+      if (m_sort_color == right_color) {
+        m_sort_trigger_time = current_time;
+        m_sort_state = SortState::RETRACT_DELAY;
+        RCLCPP_INFO(node_ptr_->get_logger(),
+          "[autoSort] correct colour (%d) detected -> RETRACT in %.2fs",
+          static_cast<int>(m_sort_color), m_sort_delay);
+      }
+      break;
+
+    case SortState::RETRACT_DELAY:
+      // Stay extended until the correct ball reaches the sorter, then retract so
+      // it passes through.
+      if (current_time - m_sort_trigger_time >= m_sort_delay) {
+        m_sort_state = SortState::INTAKING;
+        RCLCPP_INFO(node_ptr_->get_logger(), "[autoSort] retracted -> INTAKING");
+      } else {
+        sorter_active = true;
+      }
+      break;
+  }
+
+  rhi_ptr_->setDigitalOut(m_sorter_io_port, sorter_active);
+  // Also publish to the blackboard so a robot plugin's autonomous() pneumatics
+  // pass (which runs after this and applies "sorter_active") doesn't clobber the
+  // direct write above. Harmless in teleop, where nothing reads it.
+  bt_->set_variable<bool>("sorter_active", sorter_active);
 }
 
 bool TankRobotPlugin::runAutonFromDriver(JoyPtr joy_data, double current_time)
@@ -724,7 +990,7 @@ bool TankRobotPlugin::runAutonFromDriver(JoyPtr joy_data, double current_time)
       resetBT();
 
       m_odom_ptr->resetPose();
-      resetWorldPose();
+      // resetWorldPose(); // TODO is this intentional
 
       std::this_thread::sleep_for(500ms);
     }
@@ -757,161 +1023,187 @@ void TankRobotPlugin::toggleBagRecorder(JoyPtr joy_data)
   }
 }
 
-void TankRobotPlugin::updateIntake(bool R2, bool R1, bool L1, bool R, double current_time)
+void TankRobotPlugin::updateIntake(bool R2, bool R1, bool L1, bool L2)
 {
-  static bool first_r2 = false;
-  static bool first_r2_started = false;
-  // Manual Ground Pickup control
-  double ground_pickup_power = 0;
-  int32_t ground_pickup_current = 0;
-  if (R2) {
-    ground_pickup_power = 1.0;
-    ground_pickup_current = 2500;
-    if (first_r2) {
-      first_r2_started = true;
-    }
-  } else if (R) {
-    ground_pickup_power = -1.0;
-    ground_pickup_current = 2500;
-  } else {
-    ground_pickup_power = 0.0;
-    ground_pickup_current = 0;
-    if (first_r2_started) {
-      first_r2 = false;
-    }
-  }
-  // Conveyor control
-  // We assume any manual conveyor control misaligns the hooks
-  double conveyor_power = 0;
-  int32_t conveyor_current = 0;
+  double intake_power = 0.0;
+  double scorer_power = 0.0;
+
+  // R2 logic: Intake mode
   if (R1) {
-    conveyor_power = 1.0;
-    conveyor_current = 2500;
-    m_conveyor_hook_is_aligned = false;
-  } else if (L1 && !R2) {
-    conveyor_power = -1.0;
-    conveyor_current = 2500;
-    m_conveyor_hook_is_aligned = false;
-  } else {
-    conveyor_power = 0.0;
-    conveyor_current = 0;
+    intake_power = 1.0;     // Intake motor always runs with R2
+
+    // Chord logic: R2 is held, check for L1/L2
+    
+
+    // Hardware Update: Write the forced state to the piston immediately
+    rhi_ptr_->setDigitalOut(digital_io_port_map["score_pos"], m_score_pos_up);
+  }
+  // R1 logic: Outtake mode (Reverses both motors)
+  else if (R2) {
+    intake_power = -1.0;
+  } 
+  else if (L2) {
+      m_score_pos_up = true;        // Force scoring piston UP
+      scorer_power = 1.0;           // Activate scorer motor
+      intake_power = 1.0;
+          rhi_ptr_->setDigitalOut(digital_io_port_map["score_pos"], m_score_pos_up);
+
+  } 
+  else if (L1) {
+      m_score_pos_up = false;       // Force scoring piston DOWN
+      scorer_power = 1.0;       
+      intake_power = 1.0;
+      rhi_ptr_->setDigitalOut(digital_io_port_map["score_pos"], m_score_pos_up);
+
+  } 
+  else {
+      // R2 alone: only the intake motor runs
+      intake_power = 0.0;
+      scorer_power = 0.0;
   }
 
-  // Align Conveyor when Ground Pickup is active and there are no commands going to manual Conveyor control
-  if (R2 && !R1 && !m_conveyor_hook_is_ejecting) {
-    m_conveyor_hook_is_aligned = !(m_hook_fraction < m_conveyor_hook_align_threshold);
-    if (m_conveyor_hook_is_aligned || first_r2) {
-      m_conveyor_last_aligned_position = m_conveyor_position_abs;
-      conveyor_power = 0;
-      conveyor_current = 0;
-    } else {
-      conveyor_power = m_conveyor_hook_align_power;
-      conveyor_current = 1000;
-    }
-  }
+  // Set motor voltages ejector_motor
+  rhi_ptr_->setMotorVoltageCommandPercent("intake_motor", intake_power);
+  rhi_ptr_->setMotorVoltageCommandPercent("scorer_motor", scorer_power);
+  rhi_ptr_->setMotorVoltageCommandPercent("ejector_motor", scorer_power);
 
-  // Transition to ejection mode
-  static double ejecting_start_time = 0.0;
-  if (R2 && L1 && m_conveyor_hook_is_aligned && !m_conveyor_hook_is_ejecting) {
-    ejecting_start_time = current_time;
-    m_conveyor_hook_is_ejecting = true;
-    m_conveyor_hook_is_aligned = false;
-  }
-
-  // Max timeout on ejection
-  if (m_conveyor_hook_is_ejecting && current_time > ejecting_start_time + 1.5) {
-    m_conveyor_hook_is_ejecting = false;
-  }
-
-  // During ejection, run until we reach throw position, then transition to throw
-  if (m_conveyor_hook_is_ejecting) {
-    double throw_dist_rel = m_conveyor_hook_throw_fraction * m_conveyor_ticks_per_hook;
-    if ((m_conveyor_position_abs - m_conveyor_last_aligned_position) > throw_dist_rel && !m_conveyor_is_throwing) {
-      m_conveyor_is_throwing = true;
-      m_conveyor_hook_is_ejecting = false;
-      m_conveyor_throw_start_time = current_time;
-    }
-    conveyor_power = 1.0;
-    conveyor_current = 2500;
-  }
-
-  // Throw reverses for set duration and then zeros conveyor and returns to manual control
-  if (m_conveyor_is_throwing) {
-    conveyor_power = -0.1;
-    conveyor_current = 500;
-    if (current_time > m_conveyor_throw_start_time + m_conveyor_hook_throw_duration) {
-      m_conveyor_is_throwing = false;
-      conveyor_power = 0.0;
-      conveyor_current = 0;
-    }
-  }
-
-  rhi_ptr_->setMotorVoltageCommandPercent("ground_pickup_motor", ground_pickup_power);
-  rhi_ptr_->setMotorCurrentLimitMilliAmps("ground_pickup_motor", ground_pickup_current);
-
-  rhi_ptr_->setMotorVoltageCommandPercent("conveyor_motor_top", conveyor_power);
-  rhi_ptr_->setMotorCurrentLimitMilliAmps("conveyor_motor_top", conveyor_current);
-  rhi_ptr_->setMotorVoltageCommandPercent("conveyor_motor_bottom", conveyor_power);
-  rhi_ptr_->setMotorCurrentLimitMilliAmps("conveyor_motor_bottom", conveyor_current);
-
-  m_loop_current_limits.push_back(ground_pickup_current);
-  m_loop_current_limits.push_back(conveyor_current * 2.0);
+  // Safety current limits to prevent burnouts during jams
+  rhi_ptr_->setMotorCurrentLimitMilliAmps("intake_motor", 2500);
+  rhi_ptr_->setMotorCurrentLimitMilliAmps("scorer_motor", 2500);
+  rhi_ptr_->setMotorCurrentLimitMilliAmps("ejector_motor", 2500);
 }
 
-void TankRobotPlugin::updateIntakeFromJoystick(JoyPtr joy_data, bool shift_l, bool shift_r, double current_time)
+void TankRobotPlugin::updateLift(bool R2, bool R1)
 {
-  if (shift_r || shift_l) {
-    updateIntake(false, false, false, false, current_time); // Default mode
-  } else {
-    if (joy_data->btn_x) {
-      toggleBite(true);
-    } else {
-      toggleBite(false);
-    }
-    updateIntake(joy_data->btn_r2, joy_data->btn_r1, joy_data->btn_l1, joy_data->btn_l2, current_time); // Default mode
+  double lift_power = 0.0;
+
+  if (R1) {
+    lift_power = 1.0;
   }
+  else if (R2) {
+    lift_power = -1.0;
+  }
+  else {
+    lift_power = 0.0;
+  }
+
+  rhi_ptr_->setMotorVoltageCommandPercent("lift1_motor", lift_power);
+  rhi_ptr_->setMotorVoltageCommandPercent("lift2_motor", lift_power);
+
+  rhi_ptr_->setMotorCurrentLimitMilliAmps("lift1_motor", 2500);
+  rhi_ptr_->setMotorCurrentLimitMilliAmps("lift2_motor", 2500);
 }
 
-void TankRobotPlugin::updateConveyorOnly(bool active)
+void TankRobotPlugin::updateArm(bool l2_pressed)
 {
-  double conveyor_power = 1.0;
-  double conveyor_current = 2500;
+  // Edge-triggered: each L2 press advances to the next stage, wrapping back
+  // to the first after the last.
+  static bool last_l2_state = false;
+  if (l2_pressed && !last_l2_state) {
+    m_arm_stage = (m_arm_stage + 1) % m_arm_stage_positions_deg.size();
+    m_arm_controller_ptr->reset();
+  }
+  last_l2_state = l2_pressed;
 
-  rhi_ptr_->setMotorVoltageCommandPercent("conveyor_motor_top", conveyor_power);
-  rhi_ptr_->setMotorCurrentLimitMilliAmps("conveyor_motor_top", conveyor_current);
-  rhi_ptr_->setMotorVoltageCommandPercent("conveyor_motor_bottom", conveyor_power);
-  rhi_ptr_->setMotorCurrentLimitMilliAmps("conveyor_motor_bottom", conveyor_current);
-
-  m_loop_current_limits.push_back(conveyor_current * 2.0);
+  updateArmToStage(m_arm_stage);
 }
 
-void TankRobotPlugin::toggleBite(bool signal)
+void TankRobotPlugin::updateArmToStage(size_t stage)
 {
-  static bool bite_btn_pressed = false;
-  if (signal && !bite_btn_pressed) {
-    bite_btn_pressed = true;
-    m_bite_closed = !m_bite_closed;
-  } else if (!signal) {
-    bite_btn_pressed = false;
-  }
-  rhi_ptr_->setDigitalOut(digital_io_port_map["bite"], m_bite_closed);
+  double target_position_deg = m_arm_stage_positions_deg[stage];
+  double current_position_deg = rhi_ptr_->getMotorPosition("arm_motor");
+  double current_velocity_deg_per_sec = rhi_ptr_->getMotorVelocityRPM("arm_motor") * 6.0;
+
+  double error = target_position_deg - current_position_deg;
+  double error_deriv = -current_velocity_deg_per_sec;
+
+  double arm_power = ghost_util::clamp(m_arm_controller_ptr->calculateCommand(error, error_deriv), -1.0, 1.0);
+
+  rhi_ptr_->setMotorVoltageCommandPercent("arm_motor", arm_power);
+  rhi_ptr_->setMotorCurrentLimitMilliAmps("arm_motor", 2500);
 }
 
-void TankRobotPlugin::updateClamp(bool close, bool open, bool shift_l)
+void TankRobotPlugin::updateLiftToStage(size_t stage)
 {
-  if (shift_l) {
-    // Close on L2 rising edge
-    if (close) {
-      m_clamp_closed = true;
-    }
+  double target_position_deg = m_lift_stage_positions_deg[stage];
+  double current_position_deg = rhi_ptr_->getMotorPosition("lift1_motor");
+  double current_velocity_deg_per_sec = rhi_ptr_->getMotorVelocityRPM("lift1_motor") * 6.0;
 
-    // Open on R2 rising edge
-    if (open) {
-      m_clamp_closed = false;
-    }
+  double error = target_position_deg - current_position_deg;
+  double error_deriv = -current_velocity_deg_per_sec;
 
-    rhi_ptr_->setDigitalOut(digital_io_port_map["clamp"], m_clamp_closed);
+  double lift_power = ghost_util::clamp(m_lift_controller_ptr->calculateCommand(error, error_deriv), -1.0, 1.0);
+
+  rhi_ptr_->setMotorVoltageCommandPercent("lift1_motor", lift_power);
+  rhi_ptr_->setMotorVoltageCommandPercent("lift2_motor", lift_power);
+  rhi_ptr_->setMotorCurrentLimitMilliAmps("lift1_motor", 2500);
+  rhi_ptr_->setMotorCurrentLimitMilliAmps("lift2_motor", 2500);
+}
+
+void TankRobotPlugin::updateIntakeFromJoystick(JoyPtr joy_data)
+{
+  // Pass R2 for intake, R1 for outtake
+  updateIntake(joy_data->btn_r2, joy_data->btn_r1, joy_data->btn_l1, joy_data->btn_l2);
+}
+
+void TankRobotPlugin::updateLiftFromJoystick(JoyPtr joy_data)
+{
+  // Pass R2 for lift up, R1 for lift down
+  updateLift(joy_data->btn_r2, joy_data->btn_r1);
+}
+
+void TankRobotPlugin::updateArmFromJoystick(JoyPtr joy_data)
+{
+  updateArm(joy_data->btn_l2);
+}
+
+void TankRobotPlugin::updateMatchLoading(bool input)
+{
+  static bool last_btn_b_state = false;
+  if (input && !last_btn_b_state) {
+    m_match_loading_up = !(m_match_loading_up);
   }
+  last_btn_b_state = input;
+
+  rhi_ptr_->setDigitalOut(digital_io_port_map["match_loading"], m_match_loading_up);
+}
+
+
+void TankRobotPlugin::updateColorSwitcher(bool input)
+{
+  static bool last_btn_d_state = false;
+  if (input && !last_btn_d_state) {
+    m_color_switcher = !(m_color_switcher);
+  }
+  last_btn_d_state = input;
+
+  rhi_ptr_->setDigitalOut(digital_io_port_map["color_sorter"], !m_color_switcher);
+
+}
+
+void TankRobotPlugin::updateScorePos(bool input)
+{
+  static bool last_l2_state = false;
+  if (input && !last_l2_state) {
+    m_score_pos_up = !(m_score_pos_up);
+  }
+  last_l2_state = input;
+
+  rhi_ptr_->setDigitalOut(digital_io_port_map["score_pos"], m_score_pos_up);
+
+}
+
+
+void TankRobotPlugin::updateDescore(bool input)
+{
+  static bool last_l1_state = false;
+  if (input && !last_l1_state) {
+    m_descore_up = !(m_descore_up);
+  }
+  last_l1_state = input;
+
+  rhi_ptr_->setDigitalOut(digital_io_port_map["descorer"], m_descore_up);
+
 }
 
 // pressing u takes over all right buttons
@@ -948,31 +1240,15 @@ void TankRobotPlugin::updateMusic(double current_time, JoyPtr joy_data)
   }
 }
 
-void TankRobotPlugin::updateGoalRush(bool left_rush, bool right_rush, bool enabled)
-{
-  if (enabled) {
-    if (left_rush && right_rush && !m_rush_button_pressed) {
-      m_rush_button_pressed = true;
-      m_rush_held = !m_rush_held;
-    } else {m_rush_button_pressed = false;}
-    rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_l"], m_rush_held || left_rush);
-    rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_r"], m_rush_held || right_rush);
-  } else {
-    rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_l"], false);
-    rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_r"], false);
-  }
-  if (m_rush_held) {
-    rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_l"], true);
-    rhi_ptr_->setDigitalOut(digital_io_port_map["goal_rush_r"], true);
-  }
-}
 
 void TankRobotPlugin::updateDrivetrain(JoyPtr joy_data)
 {
-  m_tank_model_ptr->driveCommandJoystick(joy_data->left_y, -joy_data->right_x, 0.05);
+  double left_pct = joy_data->left_y / 127.0;
+  double right_pct = joy_data->right_y / 127.0;
+  m_tank_model_ptr->driveCommandTank(left_pct, right_pct);
 
   int32_t drive_curr_lim = static_cast<int32_t>(ghost_control::v5_current_limiting::getRemainingCurrentDistributed(m_loop_current_limits, m_num_motors));
-  if (std::fabs(joy_data->left_y / 127.0) < 0.05 && std::fabs(-joy_data->right_x / 127.0) < 0.05) {
+  if (std::fabs(left_pct) < 0.05 && std::fabs(right_pct) < 0.05) {
     drive_curr_lim = 0;
   }
 
@@ -1067,6 +1343,8 @@ void TankRobotPlugin::updateAndPublishOdometry()
   auto odom_diff_theta =
     std::fabs(ghost_util::SmallestAngleDistRad(m_curr_odom_pose.z(), m_last_odom_pose.z()));
 
+    // printf("delta_theta: %.4f  yaw: %.4f\n", odom_diff_theta, m_curr_odom_pose.z());
+
   // Holonomic Motion Model
   Eigen::Vector3d diff_std = Eigen::Vector3d(
     m_k1 * odom_diff_x + m_k2 * odom_diff_y + m_k3 * odom_diff_theta,
@@ -1125,7 +1403,25 @@ void TankRobotPlugin::updateAndPublishOdometry()
 
   m_odom_pub->publish(msg);
 
+  // Cache for the watchdog so it can hold this value if the brain drops out.
+  m_last_odom_msg = msg;
+  m_last_sensor_time = std::chrono::steady_clock::now();
+
   m_last_odom_pose = m_curr_odom_pose;
+}
+
+void TankRobotPlugin::odomWatchdogLoop()
+{
+  // Something was published in the last second; nothing to do.
+  if (std::chrono::steady_clock::now() - m_last_sensor_time <
+    std::chrono::seconds(1))
+  {
+    return;
+  }
+  // Stale: republish the last odom so odom_ekf keeps getting a measurement
+  // (identity until the first real reading).
+  m_last_odom_msg.header.stamp = node_ptr_->get_clock()->now();
+  m_odom_pub->publish(m_last_odom_msg);
 }
 
 void TankRobotPlugin::resetWorldPose()

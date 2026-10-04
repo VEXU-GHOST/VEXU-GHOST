@@ -31,6 +31,12 @@
 #include "ghost_tank/bt_nodes/biteCmd.hpp"
 #include "ghost_tank/bt_nodes/clampCmd.hpp"
 #include "ghost_tank/bt_nodes/climbCmd.hpp"
+#include "ghost_tank/bt_nodes/sorterCmd.hpp"
+#include "ghost_tank/bt_nodes/autoSortCmd.hpp"
+#include "ghost_tank/bt_nodes/switcherCmd.hpp"
+#include "ghost_tank/bt_nodes/leftBlockerCmd.hpp"
+#include "ghost_tank/bt_nodes/rightBlockerCmd.hpp"
+#include "ghost_tank/bt_nodes/littleWillCmd.hpp"
 #include "ghost_tank/bt_nodes/shutoffNode.hpp"
 #include "ghost_tank/bt_nodes/intakeCmd.hpp"
 #include "ghost_tank/bt_nodes/isHanging.hpp"
@@ -42,14 +48,27 @@
 #include "ghost_tank/bt_nodes/neutralStakeCmd.hpp"
 #include "ghost_tank/bt_nodes/goalRushDetected.hpp"
 #include "ghost_tank/bt_nodes/goalDetected.hpp"
+#include "ghost_tank/bt_nodes/distanceThreshold.hpp"
 #include "ghost_tank/bt_nodes/boundaryCheck.hpp"
 #include "ghost_tank/bt_nodes/moveVoltage.hpp"
 #include "ghost_tank/bt_nodes/moveScissor.hpp"
 #include "ghost_tank/bt_nodes/turnToPoint.hpp"
 #include "ghost_tank/bt_nodes/generate_bezier_path.hpp"
+#include "ghost_tank/bt_nodes/generate_planner_path.hpp"
+#include "ghost_tank/bt_nodes/goal_pose_listener.hpp"
 #include "ghost_tank/bt_nodes/follow_path_pure_pursuit.hpp"
+#include "ghost_tank/bt_nodes/follow_path_controller_server.hpp"
 #include "ghost_tank/bt_nodes/arcturnToPoint.hpp"
 #include "ghost_tank/bt_nodes/moveToPoint.hpp"
+#include "ghost_tank/bt_nodes/actuallyMoveToPoint.hpp"
+#include "ghost_tank/bt_nodes/adjustSwitcher.hpp"
+#include "ghost_tank/bt_nodes/score_pos.hpp"
+#include "ghost_tank/bt_nodes/scoreBall.hpp"
+#include "ghost_tank/bt_nodes/arm_pos.hpp"
+#include "ghost_tank/bt_nodes/lift_pos.hpp"
+#include "ghost_tank/bt_nodes/outtakeBalls.hpp"
+#include "ghost_tank/bt_nodes/match_loading.hpp"
+#include "ghost_tank/bt_nodes/descorer.hpp"
 
 #include "ghost_tank/bt_nodes/bt_util.hpp"
 
@@ -69,7 +88,7 @@ public:
   void init_tree();
   void set_path(std::string path);
 
-  template<typename T>
+  template<typename T>  
   void set_variable(std::string name, T value)
   {
     if (global_blackboard_) {

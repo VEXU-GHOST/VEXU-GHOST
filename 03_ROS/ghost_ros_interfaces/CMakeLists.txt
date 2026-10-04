@@ -19,6 +19,9 @@ set(DEPENDENCIES
   ghost_planners
   pluginlib
   rclcpp
+  std_msgs
+  tf2
+  tf2_ros
   yaml-cpp
   )
 
@@ -58,10 +61,31 @@ install(
   INCLUDES DESTINATION include
 )
 
+###################################
+#### Sensor Host protocol codec ####
+###################################
+# Pure, I/O-free wire-format codec — shared by the node and the unit tests.
+add_library(sensor_host_protocol SHARED
+  src/sensor_host/protocol.cpp
+)
+target_include_directories(sensor_host_protocol
+  PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+ament_export_targets(sensor_host_protocol HAS_LIBRARY_TARGET)
+install(
+  TARGETS sensor_host_protocol
+  EXPORT sensor_host_protocol
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
+)
+
 #####################
 #### Executables ####
 #####################
-# Jetson Serial Node
+# Jetson Serial Node for V5
 add_executable(jetson_v5_serial_node
   src/serial/jetson_v5_serial_node.cpp
 )
@@ -80,6 +104,41 @@ target_include_directories(jetson_v5_serial_node
   $<INSTALL_INTERFACE:include>)
 install(TARGETS
   jetson_v5_serial_node
+  DESTINATION lib/${PROJECT_NAME})
+
+# Inter-Robot Comms Node: produces /comms/self (quantized own pose) and consumes /comms/other_robot
+# (the peer's relayed state) -> map->other_robot/base_link TF.
+add_executable(inter_robot_comms_node
+  src/comms/inter_robot_comms_node.cpp
+)
+ament_target_dependencies(inter_robot_comms_node
+  ${DEPENDENCIES}
+)
+target_include_directories(inter_robot_comms_node
+  PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+install(TARGETS
+  inter_robot_comms_node
+  DESTINATION lib/${PROJECT_NAME})
+
+# Jetson Serial Node for Sensor Host
+add_executable(jetson_sensor_host_serial_node
+  src/serial/jetson_sensor_host_serial_node.cpp
+)
+ament_target_dependencies(jetson_sensor_host_serial_node
+  ${DEPENDENCIES}
+)
+target_link_libraries(jetson_sensor_host_serial_node
+  sensor_host_protocol
+  yaml-cpp
+)
+target_include_directories(jetson_sensor_host_serial_node
+  PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+install(TARGETS
+  jetson_sensor_host_serial_node
   DESTINATION lib/${PROJECT_NAME})
 
 # V5 Robot Base Library
@@ -225,6 +284,7 @@ set(TESTS
   test_robot_hardware_interface_ros
   test_device_interfaces_ros
   test_msg_helpers
+  test_other_robot_codec
 )
 foreach(TEST ${TESTS})
   ament_add_gtest(${TEST} test/${TEST}.cpp)
@@ -234,5 +294,26 @@ foreach(TEST ${TESTS})
     msg_helpers
   )
 endforeach()
+
+# Sensor host protocol: hardware-free unit tests, and a hardware-gated
+# integration test that auto-skips when no sensor host is connected.
+ament_add_gtest(test_sensor_host_protocol test/test_sensor_host_protocol.cpp)
+target_link_libraries(test_sensor_host_protocol gtest_main sensor_host_protocol)
+
+# Inter-robot comms integration tests (ROS-middleware-backed, not pure unit tests):
+#   publisher  - fake map->base_link TF in, /comms/self quantization out
+#   receiver   - /comms/other_robot in, map->other_robot/base_link TF out
+#   loopback   - full producer -> loopback -> receiver chain; pose fidelity end to end
+foreach(COMMS_TEST
+    test_inter_robot_publisher
+    test_inter_robot_receiver
+    test_inter_robot_loopback)
+  ament_add_gtest(${COMMS_TEST} test/${COMMS_TEST}.cpp)
+  ament_target_dependencies(${COMMS_TEST} ${DEPENDENCIES})
+  target_link_libraries(${COMMS_TEST} gtest_main)
+endforeach()
+
+ament_add_gtest(test_sensor_host_hardware test/test_sensor_host_hardware.cpp)
+target_link_libraries(test_sensor_host_hardware gtest_main sensor_host_protocol)
 
 ament_package()

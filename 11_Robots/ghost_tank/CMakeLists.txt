@@ -16,6 +16,8 @@ set(DEPENDENCIES
   geometry_msgs
   sensor_msgs
   nav_msgs
+  nav2_msgs
+  rclcpp_action
   ghost_msgs
   visualization_msgs
   matplotlib_cpp
@@ -113,54 +115,54 @@ install(
   INCLUDES DESTINATION include
 )
 
-add_library(alpha_jerry_plugin SHARED src/alpha_jerry_plugin.cpp)
-target_include_directories(alpha_jerry_plugin
+add_library(clyde_plugin SHARED src/clyde_plugin.cpp)
+target_include_directories(clyde_plugin
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-  target_link_libraries(alpha_jerry_plugin
+  target_link_libraries(clyde_plugin
     tank_model
     tank_odom
     tank_tree
     tank_robot_plugin
   )
-ament_target_dependencies(alpha_jerry_plugin
+ament_target_dependencies(clyde_plugin
   ${DEPENDENCIES}
 )
 ament_export_libraries(
-  alpha_jerry_plugin
+  clyde_plugin
 )
-ament_export_targets(alpha_jerry_plugin HAS_LIBRARY_TARGET)
+ament_export_targets(clyde_plugin HAS_LIBRARY_TARGET)
 install(
-TARGETS alpha_jerry_plugin
-EXPORT alpha_jerry_plugin
+TARGETS clyde_plugin
+EXPORT clyde_plugin
 LIBRARY DESTINATION lib
 ARCHIVE DESTINATION lib
 RUNTIME DESTINATION bin
 INCLUDES DESTINATION include
 )
 
-add_library(omega_jerry_plugin SHARED src/omega_jerry_plugin.cpp)
-target_include_directories(omega_jerry_plugin
+add_library(blinky_plugin SHARED src/blinky_plugin.cpp)
+target_include_directories(blinky_plugin
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-  target_link_libraries(omega_jerry_plugin
+  target_link_libraries(blinky_plugin
     tank_model
     tank_odom
     tank_tree
     tank_robot_plugin
   )
-ament_target_dependencies(omega_jerry_plugin
+ament_target_dependencies(blinky_plugin
   ${DEPENDENCIES}
 )
 ament_export_libraries(
-  omega_jerry_plugin
+  blinky_plugin
 )
-ament_export_targets(omega_jerry_plugin HAS_LIBRARY_TARGET)
+ament_export_targets(blinky_plugin HAS_LIBRARY_TARGET)
 install(
-TARGETS omega_jerry_plugin
-EXPORT omega_jerry_plugin
+TARGETS blinky_plugin
+EXPORT blinky_plugin
 LIBRARY DESTINATION lib
 ARCHIVE DESTINATION lib
 RUNTIME DESTINATION bin
@@ -175,6 +177,12 @@ set(NODES
   biteCmd
   clampCmd
   climbCmd
+  sorterCmd
+  autoSortCmd
+  switcherCmd
+  leftBlockerCmd
+  rightBlockerCmd
+  littleWillCmd
   shutoffNode
   intakeCmd
   isHanging
@@ -186,14 +194,27 @@ set(NODES
   setColorTarget
   goalRushDetected
   goalDetected
+  distanceThreshold
   boundaryCheck
   moveVoltage
   turnToPoint
   arcturnToPoint
   moveToPoint
+  actuallyMoveToPoint
   moveScissor
   generate_bezier_path
+  generate_planner_path
+  follow_path_controller_server
+  goal_pose_listener
   load_path_from_csv
+  adjustSwitcher
+  score_pos
+  scoreBall
+  outtakeBalls
+  match_loading
+  descorer
+  arm_pos
+  lift_pos
 )
 
 foreach(NODE ${NODES})

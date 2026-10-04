@@ -66,6 +66,27 @@ struct ParticleFilterConfig
   float init_x_sigma;
   float init_y_sigma;
   float init_r_sigma;
+  // Number of LIDAR update cycles to force immediately after a pose reset,
+  // regardless of how far the robot has moved (skips the min_update_dist/angle
+  // gate) so the freshly seeded cloud converges right away.
+  int initial_update_cycles;
+  // Global (uniform) initialization. When init_mode == 1, Initialize() seeds a
+  // uniform x,y grid spanning the field (init_uniform_center +/- size/2 in the
+  // map frame) with init_angles_per_position gaussian angle hypotheses per cell
+  // (mean = reset heading, sigma = init_r_sigma), instead of a gaussian cloud
+  // around the reset xy. Grid spacing = init_spatial_tolerance_m /
+  // init_particles_per_tolerance, so the particle count is derived from the
+  // observation tolerance, not configured directly. The fat cloud collapses
+  // back to num_particles once the initial_update_cycles forced updates finish.
+  // Relies on a known heading to break the field's square symmetry.
+  int init_mode;
+  float init_spatial_tolerance_m;
+  int init_particles_per_tolerance;
+  int init_angles_per_position;
+  float init_uniform_center_x;
+  float init_uniform_center_y;
+  float init_uniform_width;
+  float init_uniform_height;
   float k1;
   float k2;
   float k3;
@@ -141,7 +162,7 @@ public:
   // Resample particles.
   void Resample();
 
-  void LowVarianceResample();
+  void LowVarianceResample(std::size_t target_size);
 
   void SortMap();
   static bool horizontal_line_compare(const geometry::Line2f l1, const geometry::Line2f l2);
@@ -214,6 +235,11 @@ private:
 
   Eigen::Vector2f last_update_loc_;
   float last_update_angle_;
+  // Remaining number of LIDAR updates to force regardless of how far the robot
+  // has moved. Set to config.initial_update_cycles by Initialize() so a
+  // /set_pf_pose reset corrects against the map immediately instead of waiting
+  // for min_update_dist/angle, and decremented as each forced update fires.
+  int forced_updates_remaining_ = 0;
   int resample_loop_counter_ = 0;
   double end_time = 0;
 };
